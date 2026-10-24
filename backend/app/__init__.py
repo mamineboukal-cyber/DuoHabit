@@ -6,6 +6,7 @@ import os
 
 from flask import Flask
 
+from . import models  # noqa: F401  (registers tables on the metadata for Alembic)
 from .config import CONFIG_MAP, validate_production
 from .errors import register_error_handlers
 from .extensions import db, limiter, login_manager, migrate

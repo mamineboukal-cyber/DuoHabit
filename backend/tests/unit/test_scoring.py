@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.scoring import level_for_xp, multiplier, points
+from app.services.scoring import level_for_xp, multiplier, points, xp_progress
 
 
 @pytest.mark.parametrize(
@@ -49,3 +49,22 @@ def test_multiplier_is_capped_at_one_point_five(streak: int, expected: float) ->
 )
 def test_level_boundaries(total_xp: int, expected: int) -> None:
     assert level_for_xp(total_xp) == expected
+
+
+@pytest.mark.parametrize(
+    ("total_xp", "expected"),
+    [
+        (0, (1, 0, 100)),
+        (99, (1, 99, 100)),
+        (100, (2, 0, 300)),
+        (399, (2, 299, 300)),
+        (400, (3, 0, 500)),
+        (450, (3, 50, 500)),
+        (900, (4, 0, 700)),
+    ],
+)
+def test_xp_progress_reports_level_and_bar_bounds(
+    total_xp: int,
+    expected: tuple[int, int, int],
+) -> None:
+    assert xp_progress(total_xp) == expected

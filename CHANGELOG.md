@@ -419,5 +419,84 @@ Newest entries are appended at the bottom.
   recomputation, missing undo 404, malformed path 422, archive 204 and archived
   check-in 409. The manual user/couple rows were removed afterwards.
 
+## Step 7 — Today endpoint (F8, F6 display) — 2026-10-25
+
+### Added
+
+- `GET /api/today` (session + couple; `401 unauthenticated`, `409 no_couple`) returning
+  `date`, `timezone`, `me` and `partner` (`null` for a one-member couple).
+- Per-user blocks: `user.id` / `user.display_name`, `level`, `total_xp`, `xp_into_level`,
+  `xp_for_next_level`, `today_points`, and `habits` restricted to active habits scheduled
+  for today's couple-local weekday, ordered `created_at ASC, id ASC`.
+- Habit rows embed the Step 5 `habit` object plus `done`, `points_if_done` and
+  `checkin_points` (`null` until done). `points_if_done` reuses the Step 6 pure functions
+  with a hypothetical today check-in, so an undone row previews exactly what
+  `POST /api/habits/{id}/checkins` will award; once done it equals the stored
+  `checkin_points`.
+- `today_points` sums all of the user's check-ins dated today, including archived habits
+  and habits no longer scheduled today, so it always agrees with `total_xp` (A15).
+- `scoring.xp_progress(total_xp)` pure helper returning
+  `(level, xp_into_level, xp_for_next_level)`; levels are the Step 6 values and the bar
+  bounds are `100*(L-1)^2` and `100*L^2 - 100*(L-1)^2`.
+- Batched reads (members, scheduled habits, check-in dates, today's check-in rows,
+  per-user XP sums), so a two-user dashboard runs a handful of queries with no N+1.
+- Timezone: the dashboard date, weekday selection and both blocks follow
+  `couples.timezone`; there is no server-time fallback.
+
+### Files touched
+
+`backend/app/services/dashboard_service.py`, `backend/app/routes/dashboard.py`,
+`backend/app/services/scoring.py`, `backend/app/__init__.py`,
+`backend/tests/integration/test_today.py`, `backend/tests/unit/test_scoring.py`,
+`CHANGELOG.md`.
+
+### Tests added
+
+- 18 new tests (159 total): 7 `xp_progress` cases and 11 Today integration tests.
+- `test_today.py`: solo couple (`partner: null`, empty progress block, exact user object);
+  scheduled rows with previews, `checkin_points: null`, and habit objects equal to
+  `GET /api/habits`; an undone habit whose preview matches the real check-in endpoint
+  (yesterday's 10-point check-in gives preview 11, the real check-in awards 11, and the
+  row then reports done with 11); archived habit hidden while its points still count in
+  `today_points` and `total_xp`; habit scheduled for tomorrow absent; full couple with a
+  separate read-only partner block (level, XP, today points, owner id, no email); level
+  fields at 399 and 400 XP from a seeded historical check-in; `401` and `409 no_couple`;
+  another couple's habits and points invisible; freezegun Tokyo case where
+  2026-10-25 23:30 UTC shows Monday 2026-10-26 and only the Monday habit.
+- `test_scoring.py`: `xp_progress` at 0, 99, 100, 399, 400, 450 and 900.
+
+### Approved deviations / decisions
+
+- **`points_if_done` equals `checkin_points` once the habit is done** (owner-approved).
+  This corrects the PLAN section 7 example, which pairs `done: true` with
+  `points_if_done: 11` and `checkin_points: 10`; section 2 cannot produce that pair
+  (a streak-2 check-in is worth 11, so the stored check-in would also be 11). The
+  endpoint reports the points actually earned.
+- **`today_points` includes archived and off-schedule check-ins** (owner-approved) so it
+  stays consistent with `total_xp`; such habits remain absent from `habits` per
+  section 7.
+- **`xp_progress` added to `services/scoring.py`** (owner-approved) as a pure,
+  unit-tested helper; section 10 already assigns "xp progress" to that module.
+- **Habit rows are ordered `created_at ASC, id ASC`** (owner-approved), matching
+  `GET /api/habits`.
+- **The partner `user` object carries only `id` and `display_name`**
+  (owner-approved); email is never exposed.
+- **Extra query parameters are ignored** because the endpoint has none, matching
+  `GET /api/couple` (owner-approved).
+- **The Today UI is Step 12, not Step 13** (planning-reference correction; no code
+  impact).
+
+### Implementation notes
+
+- No model, migration, dependency, config or rate-limit changes; `flask db check`
+  reports "No new upgrade operations detected." and the development database is
+  unchanged.
+- All level/XP values are derived at read time (no stored columns);
+  `total_xp = SUM(checkins.points)` includes archived habits.
+- The preview and the real check-in share the same pure functions, so they cannot
+  drift; the owner-requested comparison test pins that behaviour.
+- `ruff check` and `ruff format --check` pass; the full suite (159 tests) passes against
+  PostgreSQL 16.
+
 
 

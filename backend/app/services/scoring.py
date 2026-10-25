@@ -21,3 +21,11 @@ def points(difficulty: int, streak_at_checkin: int) -> int:
 def level_for_xp(total_xp: int) -> int:
     """Return the level reached at ``total_xp``."""
     return math.isqrt(total_xp // 100) + 1
+
+
+def xp_progress(total_xp: int) -> tuple[int, int, int]:
+    """Return ``(level, xp_into_level, xp_for_next_level)`` for ``total_xp``."""
+    level = level_for_xp(total_xp)
+    xp_into_level = total_xp - 100 * (level - 1) ** 2
+    xp_for_next_level = 100 * level**2 - 100 * (level - 1) ** 2
+    return level, xp_into_level, xp_for_next_level

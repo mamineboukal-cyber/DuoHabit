@@ -307,6 +307,117 @@ Newest entries are appended at the bottom.
   the file was hand-reviewed and `ruff format` applied. `flask db check` reports no drift.
 - No new dependencies. `updated_at` is stored but not part of the section-7 API object.
 
+## Step 6 — Scoring, streaks and check-ins (F4, F5, F6) — 2026-10-25
+
+### Added
+
+- `services/scoring.py`: pure `multiplier`, `points` and `level_for_xp` functions.
+  The multiplier is capped at 1.5; points use `int(base * multiplier + 0.5)`;
+  levels use the exact integer equivalent of `floor(sqrt(xp / 100)) + 1`.
+- `services/streaks.py`: pure `streak_at_checkin`, `current_streak`, `longest_streak`
+  and `best_streak` functions. Unscheduled days are skipped, today is pending until it
+  is checked in, and the best streak never drops below the stored value.
+- `services/timeutil.py` now exposes `today_in_tz(timezone)` for couple-local dates.
+- `checkins` model and migration `f6af8e34ebbd`: identity PK, cascading FKs to habits
+  and users, date/points/streak columns, `created_at`, unique
+  `(habit_id, checkin_date)`, index `(user_id, checkin_date)`, and the two CHECKs.
+- `POST /api/habits/{id}/checkins` (201) returning
+  `{checkin, habit, total_xp, level}`. The owner only; the date must be today or
+  yesterday in the couple timezone and must be scheduled; points are fixed at creation.
+- `DELETE /api/habits/{id}/checkins/{date}` (200) returning `{habit, total_xp, level}`;
+  it removes the row, recomputes both streak caches, and lowers XP by exactly the
+  removed check-in's points.
+- `total_xp = SUM(checkins.points)` for the caller and `level` is derived; no user
+  columns were added.
+- Duplicate check-ins are rejected by a service pre-check and by the database unique
+  constraint; the race path maps `IntegrityError` to `409 already_checked_in`.
+- `checkin` object: `{id, habit_id, checkin_date, points, streak_at_checkin}`.
+- Malformed check-in path dates return `422 validation_error` with `details.date`;
+  malformed body dates use the same envelope through pydantic.
+- Check-in creation error precedence: 404 (missing/other couple), 403 (partner),
+  409 `habit_archived`, 422 `date_out_of_range`, 422 `not_scheduled`,
+  409 `already_checked_in`.
+
+### Migration
+
+- Revision `f6af8e34ebbd` creates `checkins` with the constraints and indexes above.
+- Verified from a clean `duohabits_migration_check` database: `flask db upgrade` ran
+  all three revisions from zero, `flask db check` reported no drift, and `\d checkins`
+  confirmed the unique constraint, index, CHECKs and both cascading FKs. The temporary
+  database was dropped afterwards; `duohabits_test` was recreated before the final
+  suite, and the development database is at `f6af8e34ebbd`.
+
+### Files touched
+
+`backend/app/models/{checkin,__init__}.py`, `backend/app/schemas/checkin.py`,
+`backend/app/services/{scoring,streaks,timeutil,checkin_service}.py`,
+`backend/app/routes/habits.py`,
+`backend/migrations/versions/f6af8e34ebbd_create_checkins.py`,
+`backend/tests/unit/{test_scoring,test_streaks,test_timeutil}.py`,
+`backend/tests/integration/test_checkins.py`, `CHANGELOG.md`.
+
+### Tests added
+
+- 52 new tests (141 total): 17 scoring, 11 streak, one `today_in_tz`, and 23 check-in
+  integration tests.
+- Scoring: the complete points ladder for difficulty 1–3 and streaks 1–8, multiplier
+  1.0–1.5 including the cap, and levels 0/99/100/399/400/900.
+- Streaks: daily 3-day run, gap reset, pending today, run since a miss, Mon/Wed/Fri
+  with off days, missed scheduled day to zero, no check-ins, unscheduled dates, and
+  best-streak preservation.
+- F4 integration: today and yesterday accepted; older/future 422; unscheduled 422;
+  duplicate 409; partner 403; other couple 404; archived 409; malformed body/path
+  dates 422; missing habit/check-in 404; undo recomputes streaks and XP; level 2 at
+  120 XP and back to level 1 after undo; archived-habit XP still counts.
+- **Order-trap test (owner request):** with `freezegun`, check in today first and then
+  yesterday. Yesterday's `streak_at_checkin` is 1 and its points are 10, proving it
+  counts only days up to yesterday; the habit's current streak becomes 2.
+- **Freezegun timezone test (owner request):** at 23:30 UTC the UTC date is
+  2026-10-25 while `Asia/Tokyo` is 2026-10-26; check-ins for 26 and 25 succeed and
+  24/27 return 422, proving the window follows the couple timezone.
+- **DB-level test:** two raw inserts for the same `(habit_id, checkin_date)` raise
+  `IntegrityError` with `constraint_name == "uq_checkins_habit_id_checkin_date"`.
+
+### Approved deviations / decisions
+
+- **`today_in_tz` added to `services/timeutil.py`** (owner-approved; not in Step 6's
+  create list) because the date window and current streak need the couple-local date;
+  `week_start`/`week_end` remain for Step 8.
+- **Unit and integration test files added** (owner-approved; Step 6's list omitted
+  them), plus a deterministic `today_in_tz` unit test.
+- **No user XP/level columns** (owner-approved): `total_xp` is the SUM of the user's
+  check-ins and `level` is derived.
+- **Undo on an archived habit is allowed** for its owner within the today/yesterday
+  window (owner-approved); the undo error list has no `habit_archived`. A test covers
+  it. Check-in creation on an archived habit is still `409 habit_archived`.
+- **Undo is limited to today/yesterday** (owner-approved); older dates return 422 even
+  if a row exists.
+- **Archived habits' check-ins still count toward `total_xp`** (owner-approved).
+- **`best_streak` is `max(stored, longest_remaining_run)`** and never decreases, so
+  undo preserves records (owner-approved).
+- **Error precedence** is the order listed above (owner-approved).
+- **Plain string path dates instead of Flask's `<date:>` converter** (owner's change):
+  the route parses `YYYY-MM-DD`, returns 422 `validation_error` with `details.date`
+  for malformed values, and still returns 404 for a missing habit with a valid date.
+- **DB-level unique test and clean-database migration verification** (owner-approved).
+- **Points and levels use exact arithmetic** (owner-approved): the specified
+  `int(base * multiplier + 0.5)` formula and `math.isqrt` for levels.
+- **`freezegun` was already in `requirements-dev.txt`**, so no dependency change.
+
+### Implementation notes
+
+- The check-in service derives the couple timezone from the habit's `couple_id` after
+  the 404/403 checks, so it never falls back to server time.
+- `streak_at_checkin` is computed from existing dates plus the new date before insert;
+  `points` and `streak_at_checkin` are then immutable (A15).
+- `total_xp` and `level` are recomputed after each commit; deleting a check-in lowers
+  them immediately.
+- `checkin_date` is serialized as `YYYY-MM-DD`; the habit payload remains the Step 5
+  object and now shows the freshly recomputed streaks.
+- Manual smoke test against a running development server confirmed 201 with 30 points
+  for a hard habit, duplicate 409, yesterday 201, older 422, undo 200 with XP/streak
+  recomputation, missing undo 404, malformed path 422, archive 204 and archived
+  check-in 409. The manual user/couple rows were removed afterwards.
 
 
 

@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 _MAX_TIMEZONE_LENGTH = 64
+
+
+def today_in_tz(timezone: str) -> date:
+    """Return the current calendar date in ``timezone``."""
+    return datetime.now(ZoneInfo(timezone)).date()
 
 
 def validate_timezone(name: str) -> str:

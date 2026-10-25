@@ -6,8 +6,9 @@ from flask import Blueprint, jsonify
 from flask_login import current_user, login_required
 
 from ..schemas import parse_body, parse_query
+from ..schemas.checkin import CreateCheckinRequest, parse_checkin_date
 from ..schemas.habit import CreateHabitRequest, HabitListQuery, UpdateHabitRequest
-from ..services import habit_service
+from ..services import checkin_service, habit_service
 
 bp = Blueprint("habits", __name__)
 
@@ -56,3 +57,38 @@ def update_habit(habit_id: int):
 def archive_habit(habit_id: int):
     habit_service.archive_habit(current_user, habit_id)
     return "", 204
+
+
+@bp.post("/habits/<int:habit_id>/checkins")
+@login_required
+def create_checkin(habit_id: int):
+    payload = parse_body(CreateCheckinRequest)
+
+    checkin, habit, total_xp, level = checkin_service.create_checkin(
+        current_user,
+        habit_id,
+        payload.date,
+    )
+    return jsonify(
+        checkin=checkin_service.checkin_payload(checkin),
+        habit=habit_service.habit_payload(habit),
+        total_xp=total_xp,
+        level=level,
+    ), 201
+
+
+@bp.delete("/habits/<int:habit_id>/checkins/<string:checkin_date>")
+@login_required
+def undo_checkin(habit_id: int, checkin_date: str):
+    parsed_date = parse_checkin_date(checkin_date)
+
+    habit, total_xp, level = checkin_service.undo_checkin(
+        current_user,
+        habit_id,
+        parsed_date,
+    )
+    return jsonify(
+        habit=habit_service.habit_payload(habit),
+        total_xp=total_xp,
+        level=level,
+    )

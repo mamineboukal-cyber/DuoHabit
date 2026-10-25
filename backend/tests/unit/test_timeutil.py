@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
+from datetime import date
 
-from app.services.timeutil import validate_timezone
+import pytest
+from freezegun import freeze_time
+
+from app.services.timeutil import today_in_tz, validate_timezone
 
 
 @pytest.mark.parametrize(
@@ -30,3 +33,9 @@ def test_valid_iana_timezones_are_accepted(name: str) -> None:
 def test_invalid_timezones_are_rejected(name: str) -> None:
     with pytest.raises(ValueError, match="valid IANA timezone"):
         validate_timezone(name)
+
+
+@freeze_time("2026-10-25 23:30:00")
+def test_today_in_tz_uses_the_requested_timezone() -> None:
+    assert today_in_tz("UTC") == date(2026, 10, 25)
+    assert today_in_tz("Asia/Tokyo") == date(2026, 10, 26)

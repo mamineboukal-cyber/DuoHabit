@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from flask_login import UserMixin
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     from .couple import Couple
 
 
-class User(db.Model):
+class User(UserMixin, db.Model):
     __tablename__ = "users"
     __table_args__ = (
         UniqueConstraint("email", name="uq_users_email"),

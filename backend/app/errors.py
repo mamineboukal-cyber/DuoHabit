@@ -5,13 +5,16 @@ from __future__ import annotations
 from typing import Any
 
 from flask import Flask, jsonify
+from pydantic import ValidationError
 from werkzeug.exceptions import HTTPException
 
 _HTTP_ERRORS: dict[int, tuple[str, str]] = {
     400: ("bad_json", "The request body could not be parsed as JSON."),
     404: ("not_found", "The requested resource was not found."),
     405: ("method_not_allowed", "This method is not allowed for the requested URL."),
+    413: ("request_too_large", "The request body is too large."),
     415: ("unsupported_media_type", "Content-Type must be application/json."),
+    429: ("rate_limited", "Too many requests. Try again later."),
 }
 
 
@@ -46,6 +49,17 @@ def error_response(
     if details:
         body["error"]["details"] = details
     return jsonify(body), status_code
+
+
+def validation_api_error(exc: ValidationError) -> ApiError:
+    """Convert a pydantic ``ValidationError`` into the API error envelope."""
+    details: dict[str, str] = {}
+    for error in exc.errors():
+        field = ".".join(str(part) for part in error["loc"]) or "body"
+        message = error["msg"].removeprefix("Value error, ")
+        details.setdefault(field, message)
+
+    return ApiError(422, "validation_error", "Invalid request data.", details)
 
 
 def register_error_handlers(app: Flask) -> None:

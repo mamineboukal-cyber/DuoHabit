@@ -81,3 +81,74 @@ Newest entries are appended at the bottom.
 - **`db.create_all()` is used for pytest schema, while CI also runs `flask db upgrade`**
   on a clean database (owner-approved).
 
+## Step 3 — Auth (F1) — 2026-10-25
+
+### Added
+
+- `POST /api/auth/register` (201, starts a session), `POST /api/auth/login` (200),
+  `POST /api/auth/logout` (204), `GET /api/auth/me` (200), `PATCH /api/auth/me` (200),
+  all returning the section-7 `user` object.
+- argon2 password hashing, lowercased emails, case-insensitive duplicate detection
+  (`409 email_taken`, including the unique-constraint race), and the `ALLOWED_EMAILS`
+  allowlist (`403 registration_closed`).
+- Uniform `401 invalid_credentials` for unknown email and wrong password.
+- Flask-Login session handling with the 30-day permanent session, JSON 401
+  (`unauthenticated`) instead of a redirect, and a user loader.
+- `security.py`: Origin guard (`403 bad_origin`), Content-Type guard
+  (`415 unsupported_media_type`), and CSP / nosniff / Referrer-Policy / X-Frame-Options
+  headers (HSTS in production only).
+- Rate limiting: shared 10/min per-IP bucket for register + login only; 120/min default
+  for everything else, keyed by `user:<id>` when authenticated and `ip:<addr>` otherwise.
+- `MAX_CONTENT_LENGTH = 64 KB`, with `413 request_too_large` in the standard error
+  envelope (also added `429 rate_limited` and pydantic `422 validation_error` details).
+- Pydantic request schemas with `extra="forbid"`, trimmed email/display name, password
+  length 10–128, and email format validation without adding `email-validator`.
+
+### Files touched
+
+`backend/app/{__init__,config,errors,extensions,security}.py`,
+`backend/app/models/user.py`, `backend/app/schemas/{__init__,auth}.py`,
+`backend/app/services/{__init__,auth_service}.py`, `backend/app/routes/auth.py`,
+`backend/tests/conftest.py`, `backend/tests/integration/{test_auth,test_security}.py`,
+`CHANGELOG.md`.
+
+### Tests added
+
+- `test_auth.py`: register 201 + session cookie flags, email lowercasing, case-insensitive
+  duplicate, allowlist, validation details (weak/too long password, blank name, extra
+  field, bad email), login success and byte-identical failure bodies, logout invalidation,
+  PATCH profile, 11th credentials request → 429, 15 consecutive `/me` calls → 200, and no
+  response ever contains the password or hash.
+- `test_security.py`: bad/allowed Origin, non-JSON body → 415, malformed JSON → 400,
+  oversized body → 413, headers present (and no HSTS in testing), headers on error
+  responses.
+
+### Approved deviations / decisions
+
+- **`services/auth_service.py` added** (owner-approved) because rule 7 forbids business
+  logic in routes; Step 3's file list omitted a service.
+- **`UserMixin` added to the `User` model** (owner-approved; no schema change).
+- **`errors.py` extended** with the 429 → `rate_limited` mapping and the pydantic
+  `validation_error` builder (owner-approved).
+- **Rate limiting enabled in `TestingConfig`** and reset by an autouse fixture
+  (owner-approved) so the 429 criterion is testable.
+- **Email validation uses a regex**, not `EmailStr`/`email-validator` (owner-approved;
+  keeps section 5's dependency list).
+- **Passwords are not whitespace-stripped** and have a 128-character maximum; request
+  bodies are capped at 64 KB (owner-approved).
+- **The 10/min per-IP bucket is shared only by register and login** (owner's change);
+  `/me`, `PATCH /me` and `/logout` use the 120/min default.
+- **120/min is keyed by user id when authenticated, IP otherwise**, and register/login set
+  `session.permanent = True` (owner-approved).
+- **Health is included in the 120/min default** (owner-approved).
+- **Development/testing `SECRET_KEY` fallbacks** were added so the app and tests run
+  without a local `.env`; production still refuses keys shorter than 32 characters.
+- **Test harness change:** the app context is now per-test (not session-wide) because
+  Flask-Login caches the user on `g`; without it, auth state leaked between tests.
+
+### Follow-up for Step 15
+
+- Configure `werkzeug.middleware.proxy_fix.ProxyFix` so rate limiting sees the real client
+  IP behind the Render proxy.
+
+

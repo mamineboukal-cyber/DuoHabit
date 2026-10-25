@@ -28,6 +28,7 @@ def _env_emails(name: str) -> list[str]:
 
 
 class Config:
+    ENVIRONMENT = "base"
     SECRET_KEY = os.environ.get("SECRET_KEY", "")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -44,21 +45,29 @@ class Config:
     SESSION_COOKIE_SECURE = False
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
 
+    # Requests with a larger body are rejected before parsing (413).
+    MAX_CONTENT_LENGTH = 64 * 1024
+
     RATELIMIT_STORAGE_URI = "memory://"
     JSON_SORT_KEYS = False
 
 
 class DevelopmentConfig(Config):
+    ENVIRONMENT = "development"
     DEBUG = True
+    # Development-only fallback so `flask run` works without a .env file.
+    SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-only-insecure-secret-key-change-me"
 
 
 class TestingConfig(Config):
+    ENVIRONMENT = "testing"
     TESTING = True
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
-    RATELIMIT_ENABLED = False
+    SECRET_KEY = os.environ.get("SECRET_KEY") or "testing-only-insecure-secret-key"
 
 
 class ProductionConfig(Config):
+    ENVIRONMENT = "production"
     DEBUG = False
     SESSION_COOKIE_SECURE = True
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "")

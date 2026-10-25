@@ -10,22 +10,33 @@ from flask.testing import FlaskClient
 from sqlalchemy.orm import Session
 
 from app import create_app
-from app.extensions import db
+from app.extensions import db, limiter
 
 
 @pytest.fixture(scope="session")
 def app() -> Iterator[Flask]:
     """Session-wide app with the schema created from model metadata."""
     application = create_app("testing")
+
     with application.app_context():
         db.create_all()
-        yield application
+
+    yield application
+
+    with application.app_context():
         db.session.remove()
         db.drop_all()
 
 
 @pytest.fixture()
-def db_session(app: Flask) -> Iterator[Session]:
+def app_context(app: Flask) -> Iterator[None]:
+    """Fresh application context per test, so ``g`` and scoped sessions never leak."""
+    with app.app_context():
+        yield
+
+
+@pytest.fixture()
+def db_session(app: Flask, app_context: None) -> Iterator[Session]:
     """Run each test inside one outer transaction, rolled back afterwards.
 
     The session is bound to the outer connection so application commits become
@@ -55,3 +66,11 @@ def db_session(app: Flask) -> Iterator[Session]:
 @pytest.fixture()
 def client(app: Flask, db_session: Session) -> FlaskClient:
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter(app_context: None) -> Iterator[None]:
+    """Keep rate-limit state from leaking between tests."""
+    limiter.reset()
+    yield
+    limiter.reset()

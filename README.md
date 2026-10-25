@@ -10,7 +10,7 @@ Repository layout: `backend/` (Flask API), `frontend/` (React SPA, added in Step
 
 - Python **3.14** (the plan targets 3.12; 3.14 was approved by the owner — see `CHANGELOG.md`)
 - Docker + Docker Compose (local PostgreSQL 16)
-- Node 20 LTS for the frontend (from Step 9)
+- Node 20 LTS for the frontend (CI uses 20; Node 24 is also verified locally)
 
 ## Local setup
 
@@ -67,8 +67,36 @@ ruff check .
 pytest
 ```
 
-Database-backed tests arrive in Step 2; `TEST_DATABASE_URL` points at `duohabits_test`
-(created in step 1 above). CI uses a PostgreSQL 16 service container.
+`TEST_DATABASE_URL` points at `duohabits_test` (created in step 1 above). CI uses a
+PostgreSQL 16 service container.
+
+## Frontend
+
+The SPA lives in `frontend/` (React, Vite, TypeScript, Tailwind).
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open <http://localhost:5173> and start the API first. The dev server proxies `/api` to
+`http://127.0.0.1:5000`.
+
+Browser writes send `Origin: http://localhost:5173`, so `ALLOWED_ORIGINS` in `.env` must
+contain it. The `.env.example` default does; a backend started without `.env` has an empty
+allowlist and rejects browser POSTs with `403 bad_origin`.
+
+Checks (the first one is what CI runs from a clean checkout):
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run format:check
+npm test
+npm run build
+```
 
 ## Configuration
 

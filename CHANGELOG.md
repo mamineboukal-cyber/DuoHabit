@@ -592,5 +592,124 @@ Newest entries are appended at the bottom.
 - `ruff check` and `ruff format --check` pass; the full suite (185 tests) passes against
   PostgreSQL 16.
 
+## Step 9 — Frontend scaffold and auth screens (F1 UI) — 2026-10-25
+
+### Added
+
+- `frontend/`: Vite 5 + React 18 + TypeScript SPA with Tailwind, TanStack Query and React
+  Router (`/login`, `/register`, `/`), styled dark and mobile-first (44 px tap targets,
+  labels, `autoComplete`, `aria-invalid`, `aria-describedby`, `role="alert"`).
+- `src/api/client.ts`: fetch wrapper that resolves paths against `window.location.origin`,
+  uses `credentials: "same-origin"`, sends JSON headers only when there is a body, returns
+  `undefined` for 204, and maps the `{"error": {...}}` envelope to `ApiError` (`status`,
+  `code`, `message`, `details`). Network failures become `ApiError(0, "network_error", …)`.
+  Exports `errorMessage`/`fieldErrors` for screens.
+- `src/api/types.ts` (`User`, `AuthResponse`, `ApiErrorEnvelope`) and
+  `src/api/hooks.ts` (`useMe`, `useLogin`, `useRegister`, `useLogout`,
+  `createQueryClient`). A 401 from any query/mutation clears the cached `["me"]`, so the
+  guards redirect; `useMe` maps its own 401 to `null` instead of an error.
+- Login and Register pages: zod validation, inline field errors, `invalid_credentials` →
+  "Wrong email or password.", `rate_limited` → "Too many attempts, wait a minute.",
+  `email_taken` on the email field, `registration_closed` as a form error, disabled/pending
+  buttons ("Logging in…", "Creating account…") and a password show/hide control.
+- `src/App.tsx`: `/` requires a session (401 → `/login`, preserving a `from` path so login
+  returns there); signed-in users are redirected away from `/login` and `/register`; a
+  failed `/me` renders an error screen with Retry instead of redirecting. A `Loading…`
+  splash covers the session check.
+- `src/components/Toast.tsx`: provider + `useToast` with auto-dismiss and `aria-live`; used
+  for logout/network failures.
+- Minimal protected placeholder at `/` (signed-in name, pairing hint, Log out) until
+  Step 10 adds `AppShell`/`PairPage` and Step 12 the Today screen.
+- Vite dev proxy `/api` → `http://127.0.0.1:5000` (IPv4 avoids Node resolving `localhost`
+  to `::1` while Flask listens on 127.0.0.1); Vitest + Testing Library + MSW (node) with
+  jsdom at `http://localhost:5173`.
+- CI `frontend` job (Node 20, `npm ci`, lint, test, build) and a README frontend section,
+  including the `ALLOWED_ORIGINS` requirement for browser writes.
+
+### Auth validation parity (owner addition)
+
+- `src/lib/validation.ts` mirrors `backend/app/schemas/auth.py` exactly: email is stripped,
+  lowercased, capped at 254 characters and matched with `^[^@\s]+@[^@\s]+\.[^@\s]+$`;
+  display name is stripped and 1–40 characters; the registration password is **not**
+  stripped and must be 10–128 characters; the login password is not stripped and must be
+  1–128 characters.
+
+### Lockfile and clean install (owner addition)
+
+- `frontend/package-lock.json` is committed; CI uses `npm ci`.
+- Verified `npm ci` from a clean copy containing only `package.json` and
+  `package-lock.json` (395 packages), then ran `esbuild 0.21.5`, `tsc 5.9.3` and
+  `vite 5.4.21` from that copy.
+
+### Files touched
+
+`frontend/package.json`, `frontend/package-lock.json`, `frontend/index.html`,
+`frontend/tsconfig.json`, `frontend/vite.config.ts`, `frontend/tailwind.config.js`,
+`frontend/postcss.config.js`, `frontend/eslint.config.js`, `frontend/.prettierrc.json`,
+`frontend/.prettierignore`, `frontend/src/{main.tsx,App.tsx,styles.css,vite-env.d.ts}`,
+`frontend/src/api/{client,types,hooks}.ts`, `frontend/src/components/Toast.tsx`,
+`frontend/src/pages/{LoginPage,RegisterPage}.tsx`, `frontend/src/lib/validation.ts`,
+`frontend/src/tests/{setup,server}.ts`, `frontend/src/tests/helpers.tsx`,
+`frontend/src/tests/{login,register,guards}.test.tsx`, `frontend/src/tests/client.test.ts`,
+`.github/workflows/ci.yml`, `README.md`, `CHANGELOG.md`. No backend files changed.
+
+### Dependencies (PLAN section 5 pins; lockfile committed)
+
+- Resolved: react/react-dom 18.3.1, react-router-dom 6.30.6, @tanstack/react-query
+  5.104.5, zod 3.25.76, vite 5.4.21, typescript 5.9.3 (from `^5.5`), tailwindcss 3.4.19,
+  vitest 2.1.9, @testing-library/react 16.3.3, msw 2.15.0, jsdom 25.0.1, eslint 9.39.5,
+  prettier 3.9.10.
+- No new runtime backend dependencies and no backend API/config changes.
+
+### Tests added
+
+- 16 frontend tests in 4 files (backend suite unchanged at 185):
+  - FE1 login: validation blocks the request; pending state ("Logging in…", disabled) then
+    navigation; `invalid_credentials` inline; 429 copy.
+  - FE1 register: validation; password reveal; `email_taken` under the email field;
+    `registration_closed` form error; pending state then navigation.
+  - FE2 (session half): unauthenticated `/` → `/login`; authenticated `/login` → `/`;
+    protected page renders; `/me` 500 shows Retry and recovers.
+  - Client: error-envelope mapping with details, network failure → status 0, 204 →
+    `undefined`.
+
+### Approved deviations / decisions
+
+1. **No-couple guard deferred to Step 10** (owner-approved): `PairPage` is created there;
+   Step 9 ships the auth guard and a protected placeholder at `/`.
+2. **PWA deferred to Step 14** (owner-approved): no `vite-plugin-pwa`, manifest or icons in
+   this step.
+3. **PLAN-pinned versions** (owner-approved): React 18, Vite 5, Vitest 2, Tailwind 3,
+   MSW 2, ESLint 9; CI uses Node 20. Local Node 24.19 ran Vite 5.4.21 and Vitest 2.1.9
+   without problems, so no major bumps were needed or made.
+4. **`src/lib/validation.ts` created now** (owner-approved) for the auth zod schemas;
+   Step 11 extends it.
+5. **Test scope extended** (owner-approved): register states, guard redirects and client
+   error mapping in addition to the three required login states. The no-couple half of FE2
+   stays in Step 10.
+6. **Protected placeholder with Log out** (owner-approved) to verify the full session
+   round-trip; no `AppShell` or tab bar yet.
+7. **`ALLOWED_ORIGINS` is a local setup requirement** (owner-approved; docs only): browser
+   writes carry `Origin: http://localhost:5173`, so `.env` must allow it. The Vite proxy
+   targets `127.0.0.1` to avoid Node's IPv6 `localhost` resolution on Windows.
+8. **Auth copy mapping** (owner-approved): `rate_limited` uses the section 8 wording rather
+   than the backend's generic message; other codes use the server message.
+9. **CI gates lint, tests and build** (owner-approved); `format:check` is available and was
+   run locally but is not a CI gate, matching the backend's `ruff format` treatment.
+
+### Implementation notes
+
+- Both routers opt into the React Router v7 future flags (`v7_startTransition`,
+  `v7_relativeSplatPath`) to remove deprecation warnings now.
+- Local npm 11.17 blocks install scripts by default and printed `allow-scripts` warnings
+  for `esbuild`/`msw`; both tools were still verified working. CI's npm 10 runs them.
+- `npm run format:check`, `npm run lint` and `npm run typecheck` pass; `npm test` is 16/16;
+  `npm run build` emits `dist/` (272 kB JS / 81 kB gzip, 11 kB CSS / 3 kB gzip).
+- Smoke test through the Vite proxy with `Origin: http://localhost:5173`: register 201 →
+  `/me` 200 → logout 204 → `/me` 401 → login 200 → `/me` 200. The temporary user was
+  deleted from the dev database and both dev servers were stopped afterwards.
+- Backend `ruff check`, `ruff format --check` and 185 tests still pass; `flask db check`
+  is unaffected (no backend changes).
+
 
 

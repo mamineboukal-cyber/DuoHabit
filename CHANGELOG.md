@@ -498,5 +498,99 @@ Newest entries are appended at the bottom.
 - `ruff check` and `ruff format --check` pass; the full suite (159 tests) passes against
   PostgreSQL 16.
 
+## Step 8 — Weekly duel (F7) — 2026-10-25
+
+### Added
+
+- `GET /api/duel/current` (session + couple; `401 unauthenticated`, `409 no_couple`)
+  returning `week_start`, `week_end`, `days_left` (`7 - today.weekday()`, so Sunday is 1),
+  `me` and `partner` blocks (`user_id`, `display_name`, points and check-in count for the
+  couple-local week), `leader` (`me`, `partner`, `tie`, or `me` when solo) and the
+  all-time `tally` of finalized weeks.
+- `GET /api/duel/history?limit=12` returning finalized weeks newest first with
+  `me_points`, `partner_points` and `result` from the caller's perspective; `limit` is
+  validated by a pydantic model (1–52, `extra="forbid"`), so `0`, `53`, `abc` and
+  unknown parameters are `422 validation_error`.
+- `weekly_results` model and migration `5dd2a18ba9e4`: identity PK, `couple_id`
+  (`ON DELETE CASCADE`), `week_start` date, `user_a_*`/`user_b_*` points, nullable
+  `winner_user_id` (NULL = tie), `finalized_at`, and
+  `UNIQUE (couple_id, week_start)`.
+- `services/duel_service.py`: lazy finalization, live week aggregates, tally and history.
+  Both endpoints finalize first (F7: "the next call to `/api/duel/current` or
+  `/api/duel/history`"), so history is correct on its own.
+- `timeutil.week_start(day)` / `week_end(day)` returning that week's Monday/Sunday.
+- Batched reads: members, one week aggregate for the live week, and one week-grouped
+  aggregate (`date_trunc`) for all missing past weeks.
+
+### Migration
+
+- Revision `5dd2a18ba9e4` creates `weekly_results`.
+- Verified from a clean `duohabits_migration_check` database: `flask db upgrade` ran all
+  four revisions from zero, `flask db check` reported no drift, and `\d weekly_results`
+  confirmed the unique constraint, the four FKs and the defaults. The temporary database
+  was dropped afterwards. The development database is at `5dd2a18ba9e4` (head).
+
+### Files touched
+
+`backend/app/models/{weekly_result,__init__}.py`,
+`backend/app/services/{timeutil,duel_service}.py`, `backend/app/schemas/duel.py`,
+`backend/app/routes/duel.py`, `backend/app/__init__.py`,
+`backend/migrations/versions/5dd2a18ba9e4_create_weekly_results.py`,
+`backend/tests/unit/test_timeutil.py`, `backend/tests/integration/test_duel.py`,
+`CHANGELOG.md`.
+
+### Tests added
+
+- 26 new tests (185 total): 14 `timeutil` cases and 12 duel integration tests.
+- U5: `week_start`/`week_end` for every weekday, month/year edges (including a leap day),
+  Sunday 23:30 and Monday 00:30 Casablanca (the freeze instants are derived from the
+  zone, so they do not depend on the tzdata offset).
+- I10: live points/counts/leader/`days_left` from both partners' perspective; live tie;
+  solo couple (`partner: null`, `leader: "me"`, zero tally, empty history); `401`/`409`;
+  finalize-once across repeated `/current` and `/history` calls; a scored win stored with
+  `winner_user_id` set; a scored tie and 0-0 weeks stored with `winner_user_id = NULL`;
+  history newest-first and `limit` 1/12/52 plus five invalid values and an unknown
+  parameter; `/history` alone finalizes; partner joining late (weeks 1–2 never stored);
+  Sunday-night to Monday rollover; two-thread concurrent finalize (committed rows with
+  unique emails, cleanup in `finally`) leaving exactly one row.
+- Point 6 is asserted on every stored row in the finalize test: `user_a_id < user_b_id`
+  and `user_a_id`/`user_b_id` are the lower/higher member ids.
+
+### Approved deviations / decisions
+
+- **Grace period instead of finalizing on Monday** (owner-approved): week W is stored only
+  once `today >= week_end(W) + 2`, i.e. from Tuesday. This is a deliberate deviation from
+  F7's wording ("when a week has passed") because A14 allows logging yesterday, so on
+  Monday a Sunday check-in can still land in W; Phase 2 coin awards make later recompute
+  unsafe. Tests pin Monday "not finalized" and Tuesday "finalized".
+- **History starts at the latest of `couples.created_at`, member 1 `users.created_at` and
+  member 2 `users.created_at`** (owner change; stricter than F7's "week containing
+  `couples.created_at`"), so weeks before the partner existed are never stored as wins.
+  A test where the partner joins in week 3 asserts no rows for weeks 1–2.
+- **Solo couples store no rows** (`weekly_results` needs both user FKs): `/current`
+  returns `partner: null`, `leader: "me"` and a zero tally; history stays empty.
+- **`schemas/duel.py` added** for the `limit` query model (§9 requires pydantic query
+  validation; mirrors `HabitListQuery`).
+- **Both endpoints finalize** (F7 §142), and finalized rows are immutable: there is no
+  recompute path for a week that already has a row.
+- **`user_a_id < user_b_id` is enforced in the service only** (owner-approved); no extra
+  CHECK constraint beyond section 6.
+- **`days_left` is computed inline** as `7 - today.weekday()` rather than adding another
+  time utility.
+
+### Implementation notes
+
+- Idempotency under concurrency relies on `INSERT ... ON CONFLICT (couple_id, week_start)
+  DO NOTHING`; missing weeks are computed from one grouped aggregate, inserted in one
+  statement in ascending week order.
+- The duel week and `week_start`/`week_end` follow `couples.timezone`; `created_at`
+  timestamps are converted to the couple timezone before deriving the first week.
+- Freezegun and Flask sessions: pytest sets fixtures up before a `freeze_time` decorator
+  starts, so cookies signed at real time are invalid when validated against a past frozen
+  clock. Duel tests therefore create users/couples inside the frozen block (or nest a
+  second freeze for the Monday/Tuesday transition).
+- `ruff check` and `ruff format --check` pass; the full suite (185 tests) passes against
+  PostgreSQL 16.
+
 
 

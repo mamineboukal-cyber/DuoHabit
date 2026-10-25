@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 _MAX_TIMEZONE_LENGTH = 64
@@ -11,6 +11,16 @@ _MAX_TIMEZONE_LENGTH = 64
 def today_in_tz(timezone: str) -> date:
     """Return the current calendar date in ``timezone``."""
     return datetime.now(ZoneInfo(timezone)).date()
+
+
+def week_start(day: date) -> date:
+    """Return the Monday of the week containing ``day``."""
+    return day - timedelta(days=day.weekday())
+
+
+def week_end(day: date) -> date:
+    """Return the Sunday of the week containing ``day``."""
+    return week_start(day) + timedelta(days=6)
 
 
 def validate_timezone(name: str) -> str:

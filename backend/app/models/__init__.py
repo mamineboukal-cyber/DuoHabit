@@ -4,5 +4,6 @@ from .checkin import Checkin
 from .couple import Couple
 from .habit import Habit
 from .user import User
+from .weekly_result import WeeklyResult
 
-__all__ = ["Checkin", "Couple", "Habit", "User"]
+__all__ = ["Checkin", "Couple", "Habit", "User", "WeeklyResult"]

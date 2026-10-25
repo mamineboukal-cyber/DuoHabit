@@ -218,5 +218,95 @@ Newest entries are appended at the bottom.
 - No model or migration changes (`flask db check` reports no drift); no new dependencies.
 - `created_at` is serialized as ISO 8601 UTC; members are ordered by id.
 
+## Step 5 — Habits (F3) — 2026-10-25
+
+### Added
+
+- `GET /api/habits` (200, `owner=me|partner`, `include_archived=false`),
+  `POST /api/habits` (201), `PATCH /api/habits/{id}` (200) and
+  `DELETE /api/habits/{id}` (204), returning the section-7 `habit` object.
+- Create defaults: `emoji=null`, `difficulty=1`, `schedule_days=[0..6]`; validation for
+  name length, emoji length, difficulty range, non-empty/in-range/duplicate-free schedule
+  days, and extra fields, all with per-field `422 validation_error` details.
+- Per-owner active-name uniqueness, case-insensitive, enforced by a partial unique index
+  and a service pre-check; the constraint race is mapped to `409 habit_name_taken`.
+  Archived names can be reused, and partners may use the same name as each other.
+- Authorization: list is filtered by the caller's `couple_id`; PATCH/DELETE return 404
+  for missing or other-couple habits and 403 for a same-couple non-owner.
+- Archive sets `archived_at` and never deletes the row, so future check-ins and points
+  remain. Archived habits are hidden by default, visible with `include_archived=true`,
+  and cannot be edited, re-archived or unarchived (404).
+- `GET`/`POST` require a couple (`409 no_couple`); `owner=partner` on a solo couple
+  returns an empty list.
+- `parse_query` helper added for validated query parameters.
+
+### Migration
+
+- Revision `68fbea57c59f` creates `habits` with identity PK, cascading FKs to `users` and
+  `couples`, `varchar(60)` name, `varchar(8)` emoji, `smallint` difficulty, `smallint[]`
+  schedule, streak counters, `archived_at`, `created_at`, `updated_at`.
+- Checks: name length, difficulty 1–3, non-empty schedule, schedule subset of 0–6,
+  non-negative streaks. Indexes: `(owner_id, archived_at)`, `(couple_id)`, and
+  `UNIQUE (owner_id, lower(name)) WHERE archived_at IS NULL`.
+- Verified from a clean database: dropped/recreated `duohabits_migration_check`, ran
+  `flask db upgrade` from zero, `flask db check` reported no drift, and `\d habits`
+  confirmed the partial index, `schedule_days` default `'{0,1,2,3,4,5,6}'::smallint[]`
+  and every CHECK. Postgres displays the index as `lower(name::text)`, which is the same
+  expression. Then dropped/recreated `duohabits_test` and ran the full suite.
+- Dev database upgraded to head (`68fbea57c59f`).
+
+### Files touched
+
+`backend/app/models/{habit,__init__}.py`,
+`backend/app/schemas/{__init__,habit}.py`,
+`backend/app/services/habit_service.py`, `backend/app/routes/habits.py`,
+`backend/app/__init__.py`,
+`backend/migrations/versions/68fbea57c59f_create_habits.py`,
+`backend/tests/integration/test_habits.py`, `CHANGELOG.md`.
+
+### Tests added
+
+- 34 integration tests, including: create defaults/custom/trimming; ten validation cases;
+  case-insensitive duplicate 409; partner name reuse and post-archive name reuse; partner
+  read-only (403 on PATCH/DELETE); other-couple 404; list defaults, `owner=partner`,
+  `include_archived`, solo-partner empty, no-couple 409 and query validation; explicit
+  creation-order assertions; PATCH subset, name conflict, explicit nulls and empty body;
+  archive hides the habit while keeping the row, re-archive and archived PATCH 404.
+- **DB-level uniqueness test:** two raw inserts of `"Run"` and `"run"` for the same owner
+  raise `IntegrityError` with `constraint_name == "uq_habits_owner_name_active"`, proving
+  the index independently of the service pre-check.
+
+### Approved deviations / decisions
+
+- **`tests/integration/test_habits.py` added** (owner-approved); Step 5's list omitted
+  test files.
+- **`parse_query` added to `schemas/__init__.py`** (owner-approved) so query parameters
+  use the same 422 envelope as bodies.
+- **Archived habits return 404 for PATCH/DELETE**, including a second DELETE, and cannot
+  be unarchived in the MVP (owner-approved).
+- **Emoji is trimmed**, blank becomes `null`, max 8 characters, and `PATCH {"emoji": null}`
+  clears it (owner-approved).
+- **`schedule_days` is sorted**, duplicates are rejected with 422, values must be 0–6 and
+  non-empty (owner-approved).
+- **PATCH semantics:** `{}` returns 200 unchanged; explicit `null` for `name`,
+  `difficulty` or `schedule_days` is a per-field 422; only `emoji` is nullable
+  (owner-approved).
+- **List order is `created_at ASC, id ASC`** (owner-approved) and asserted explicitly.
+- **`updated_at` uses SQLAlchemy `onupdate=func.now()`**, not a DB trigger
+  (owner-approved).
+- **`owner=partner` on a solo couple returns `200 {habits: []}`**; `include_archived`
+  applies to the selected owner (owner-approved).
+- **Difficulty affecting only future check-ins** is deferred to Step 6, because check-ins
+  do not exist yet; Step 5 verifies edits persist (owner-approved).
+- **DB-level partial-index test and clean-database migration verification added** at the
+  owner's request.
+
+### Implementation notes
+
+- Alembic autogenerated the expression index with `sa.literal_column("lower(name)")`;
+  the file was hand-reviewed and `ruff format` applied. `flask db check` reports no drift.
+- No new dependencies. `updated_at` is stored but not part of the section-7 API object.
+
+
 
 

@@ -1,4 +1,4 @@
-"""Pydantic request models and shared body parsing."""
+"""Pydantic request models and shared body/query parsing."""
 
 from __future__ import annotations
 
@@ -16,6 +16,14 @@ def parse_body[ModelT: BaseModel](model: type[ModelT]) -> ModelT:
 def parse_optional_body[ModelT: BaseModel](model: type[ModelT]) -> ModelT:
     """Like ``parse_body``, but an absent/empty body is treated as ``{}``."""
     return _parse(model, allow_empty=True)
+
+
+def parse_query[ModelT: BaseModel](model: type[ModelT]) -> ModelT:
+    """Parse and validate query parameters, raising the standard 422 on failure."""
+    try:
+        return model.model_validate(request.args.to_dict())
+    except ValidationError as exc:
+        raise validation_api_error(exc) from exc
 
 
 def _parse[ModelT: BaseModel](model: type[ModelT], *, allow_empty: bool) -> ModelT:

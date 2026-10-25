@@ -11,6 +11,23 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface CoupleMember {
+  id: number;
+  display_name: string;
+}
+
+export interface Couple {
+  id: number;
+  timezone: string;
+  invite_code: string | null;
+  members: CoupleMember[];
+  created_at: string;
+}
+
+export interface CoupleResponse {
+  couple: Couple;
+}
+
 export interface ApiErrorEnvelope {
   error: {
     code: string;

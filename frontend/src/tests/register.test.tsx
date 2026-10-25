@@ -109,6 +109,8 @@ describe("RegisterPage", () => {
     await actor.click(screen.getByRole("button", { name: "Create account" }));
 
     expect(screen.getByRole("button", { name: "Creating account…" })).toBeDisabled();
-    expect(await screen.findByText(/You're signed in, New/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Pair with your partner" }),
+    ).toBeInTheDocument();
   });
 });

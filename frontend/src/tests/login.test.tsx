@@ -53,7 +53,9 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: "Log in" }));
 
     expect(screen.getByRole("button", { name: "Logging in…" })).toBeDisabled();
-    expect(await screen.findByText(/You're signed in/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Pair with your partner" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the invalid-credentials error inline", async () => {

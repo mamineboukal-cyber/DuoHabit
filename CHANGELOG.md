@@ -711,5 +711,149 @@ Newest entries are appended at the bottom.
 - Backend `ruff check`, `ruff format --check` and 185 tests still pass; `flask db check`
   is unaffected (no backend changes).
 
+## Step 10 — App shell and pairing UI (F2 UI) — 2026-10-25
+
+### Added
+
+- `src/components/AppShell.tsx`: authenticated shell with the four destinations (Today,
+  Habits, Duel, Settings). Below 768 px it uses a fixed bottom tab bar with safe-area
+  padding; at 768 px and above it switches to a 240 px left sidebar. Both navigations use
+  `NavLink` (`aria-current="page"`), inline `currentColor` SVG icons, 44 px tap targets,
+  a 1100 px centered content column, and a Log out control. The shell is wrapped by the
+  session and couple guards.
+- `src/components/ComingSoon.tsx`: minimal placeholder for the tab destinations that
+  arrive in Steps 11, 13 and 14, so the complete navigation works now without inventing
+  temporary screens.
+- `src/pages/PairPage.tsx`:
+  - No couple: side-by-side (stacked on mobile) "Create our couple" and "Join with a
+    code" cards.
+  - Create: IANA timezone select defaulting to `Africa/Casablanca`, populated from
+    `Intl.supportedValuesOf("timeZone")` with a curated fallback list; `POST /api/couple`
+    sends the chosen timezone. The invite code appears in large type with Copy and a
+    "Continue to the app" button.
+  - Waiting: the page shows "Waiting for your partner…" and polls `GET /api/couple`
+    every 5 s while the couple has one member. Polling stops as soon as a second member
+    appears, after which the page redirects to `/`. `refetchIntervalInBackground` is
+    explicitly `false`, so nothing polls while the tab is hidden.
+  - Join: 8-character input that auto-uppercases, mirroring the backend alphabet
+    (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`). Inline copy for `invalid_code`, `couple_full`,
+    `already_in_couple` and `rate_limited`; field-level `422` details are displayed under
+    the input.
+  - Copy uses `navigator.clipboard.writeText`, shows a success toast, and falls back to a
+    "select it and copy it manually" toast when the Clipboard API is unavailable.
+  - Loading, error with Retry, and Log out (escape hatch if the wrong account is signed
+    in) states.
+- `src/api/types.ts`: `Couple`, `CoupleMember`, `CoupleResponse`.
+- `src/api/hooks.ts`: `coupleQueryKey`, `COUPLE_POLL_INTERVAL_MS`,
+  `useCouple` (409 `no_couple` → `null`, solo-only 5 s polling), `useCreateCouple` and
+  `useJoinCouple`. Create/join write the couple into the cache and update `["me"].couple_id`
+  immediately, so the guard admits the user to `/` without a refetch. Logout and any
+  non-`/me` 401 now also remove cached couple data.
+- `src/lib/validation.ts`: `inviteCodeSchema` (trim, uppercase, backend alphabet) and
+  `joinCoupleSchema` (object wrapper so the error maps to `invite_code`).
+- Routing: `/pair` is authenticated; `/`, `/habits`, `/duel` and `/settings` share the
+  shell and the no-couple guard. Unauthenticated users still go to `/login`; a full
+  couple visiting `/pair` is redirected to `/`.
+- Theme tokens in `tailwind.config.js`: `canvas`, `surface`/`surface-raised`,
+  `line`/`line-strong`, `content`/`content-muted`/`content-subtle`, `accent`/
+  `accent-hover`/`on-accent`, `danger`/`danger-soft`/`danger-foreground`, `success`/
+  `success-soft`/`success-foreground`; radii `control`, `card`, `pill`; the existing `sans`
+  font; plus `minHeight.tap` (44 px) and `maxWidth.content` (1100 px).
+- Step 9 screens (Login, Register, Toast, App/placeholder, base styles) were refactored to
+  those semantic classes. This is class-name-only; radii map `xl → control` and
+  `2xl → card`, with no intended visual change.
+
+### Files touched
+
+Created: `frontend/src/components/{AppShell,ComingSoon}.tsx`,
+`frontend/src/pages/PairPage.tsx`, `frontend/src/tests/{pair,appShell}.test.tsx`.
+
+Modified: `frontend/tailwind.config.js`, `frontend/src/{App.tsx,styles.css}`,
+`frontend/src/api/{types,hooks}.ts`, `frontend/src/lib/validation.ts`,
+`frontend/src/components/Toast.tsx`, `frontend/src/pages/{LoginPage,RegisterPage}.tsx`,
+`frontend/src/tests/{server.ts,setup.ts,guards.test.tsx,login.test.tsx,register.test.tsx}`,
+`CHANGELOG.md`. No backend files, dependencies, migrations or CI changes.
+
+### Tests added
+
+- 29 frontend tests in 6 files (13 new; backend unchanged at 185):
+  - Pairing (8): both cards and default timezone; create sends the selected timezone and
+    shows code/waiting/Copy/Continue; clipboard copy plus continuation into the shell;
+    poll advances 5 s, sees the second member and lands on `/`; join uppercases the code
+    and lands on `/`; malformed code blocks the request; `invalid_code` inline;
+    `couple_full` inline.
+  - Shell (3): a solo couple uses `/` without waiting on `/pair`; all four tabs navigate
+    and mark `aria-current`; a full couple visiting `/pair` is redirected to `/`.
+  - Guards (2 new): unauthenticated `/pair` → `/login`; no couple `/` → `/pair`.
+  - Updated Step 9 login/register success assertions: an unpaired user now lands on
+    `/pair` after auth, which is the new guard behaviour.
+- The polling test uses Vitest fake timers with `shouldAdvanceTime`; it completes in under
+  half a second rather than waiting five real seconds.
+
+### Approved deviations / decisions
+
+1. **Guard rule changed by the owner during this step.** No couple → `/pair`. A solo
+   couple is no longer forced to wait: it may use the whole shell normally; `/pair` stays
+   reachable, shows the invite code with a "Continue to the app" button, and keeps polling
+   every 5 s. A full couple visiting `/pair` is redirected to `/`. This supersedes the
+   original plan to keep `/pair` exclusively for one-member couples, and the tests cover
+   both the solo shell path and the full-couple redirect.
+2. **Placeholder tab destinations** (approved): `/habits`, `/duel` and `/settings` render
+   `ComingSoon` (Steps 11, 13 and 14) so navigation is complete before those screens exist.
+3. **Desktop sidebar now** (approved): A21's ≥768 px sidebar ships with the mobile bottom
+   bar in this step instead of a later revisit.
+4. **Timezone select now** (approved): included on the Pair page as specified in section 8;
+   editing the timezone remains Settings work (Step 14).
+5. **Theme-token refactor** (approved, plus the owner's constraint): all colours, font
+   families and radii live in `tailwind.config.js`; Steps 9 and 10 components use only
+   semantic classes. The only remaining literal colour outside the config is
+   `<meta name="theme-color" content="#0b1020">` in `index.html`, which cannot reference
+   Tailwind. The final audit (see notes) also checked `text-white`, `bg-white`, `bg-black`,
+   default-palette utilities and arbitrary `[#…]` values — all zero.
+6. **Log out placement** (approved): the shell owns Log out, and `/pair` has a small logout
+   button as an escape hatch. The old placeholder home button was removed. Settings will
+   take over the primary placement in Step 14.
+7. **No shared `Skeleton`/`ErrorState` yet** (approved): Pair uses small inline pending and
+   error-with-Retry blocks; Steps 11–12 can design the shared components once.
+8. **Polling test approach** (approved): fake timers with auto-advance; no real 5 s wait.
+9. **Step 9 test landing pages updated** (approved consequence): login/register success now
+   asserts the Pair page for unpaired users, and `coupledUser`/`soloCouple`/`fullCouple`
+   fixtures were added. `defaultUser` remains unpaired.
+10. **No backend changes** (approved). `GET /api/couple`'s 409 `no_couple` is mapped to
+    `null` on the client.
+11. **Owner additions honoured:** `refetchIntervalInBackground` is explicitly `false`; the
+    token audit includes the requested classes and arbitrary hex syntax; all deviations are
+    recorded here.
+
+### Implementation notes
+
+- Polling only starts when a couple exists with fewer than two members; a null (no couple)
+  or full couple never starts a timer. The interval is cleaned up when PairPage unmounts,
+  stops when the second member arrives, and is disabled while the tab is hidden.
+- `useCouple` treats only 409 `no_couple` as "no data"; other errors reach the page's Retry
+  state. A failed poll leaves the code visible and the next tick retries.
+- Create/join responses are written to both `["couple"]` and `["me"]` caches. Logout and
+  401 handling drop `["couple"]` to prevent one account's pair from leaking into the next
+  session.
+- Join validation uses an object schema so zod's error path is `invite_code`; a bare string
+  schema would have produced an empty path and no field message.
+- `npm run format:check`, `npm run lint`, `npm run typecheck` and `npm test` (29/29) pass;
+  `npm run build` emits `dist/` with 287.00 kB JS / 85.05 kB gzip and 13.52 kB CSS /
+  3.59 kB gzip.
+- Token audit commands returned no matches for default-palette utilities
+  (`text-white`, `bg-white`, `bg-black`, `slate-*`, `rose-*`, …), arbitrary colour
+  utilities, raw hex values, non-token radii, or `font-serif`/`font-mono` under
+  `frontend/src`.
+- Smoke test through the Vite proxy with two cookie sessions: register A (201) and B
+  (201); A creates a couple with `Europe/Paris` (201, one member, invite code); A's solo
+  GET shows the code; B joins with the lowercased code (200); A's next GET shows two
+  members and `invite_code: null`; both `/me` responses report the same `couple_id`;
+  `GET /pair` returns the SPA. The two users and the couple were deleted afterwards, and
+  both dev servers were stopped. The development database again has zero users and
+  zero couples.
+- Backend `ruff check` and all 185 tests still pass. Prettier normalised pre-existing CRLF
+  files to LF during `npm run format`; that produced no content changes outside the files
+  listed above.
+
 
 

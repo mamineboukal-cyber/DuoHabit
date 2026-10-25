@@ -13,9 +13,9 @@ const REGISTER_MESSAGES: Record<string, string> = {
 
 function inputClass(hasError: boolean): string {
   return [
-    "min-h-11 w-full rounded-xl border bg-ink/60 px-3 py-2 text-base text-slate-100",
-    "placeholder:text-slate-500 focus:outline-none",
-    hasError ? "border-rose-400" : "border-white/10 focus:border-accent",
+    "min-h-11 w-full rounded-control border bg-canvas/60 px-3 py-2 text-base text-content",
+    "placeholder:text-content-subtle focus:outline-none",
+    hasError ? "border-danger" : "border-line focus:border-accent",
   ].join(" ");
 }
 
@@ -74,18 +74,18 @@ export default function RegisterPage() {
         <header className="mb-8 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">DuoHabits</p>
           <h1 className="mt-2 text-3xl font-bold">Create account</h1>
-          <p className="mt-2 text-sm text-slate-400">Start a streak with your person.</p>
+          <p className="mt-2 text-sm text-content-muted">Start a streak with your person.</p>
         </header>
 
         <form
           noValidate
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-2xl border border-white/5 bg-surface p-5 shadow-xl"
+          className="space-y-4 rounded-card border border-line bg-surface p-5 shadow-xl"
         >
           <div>
             <label
               htmlFor="register-email"
-              className="mb-1.5 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-content-muted"
             >
               Email
             </label>
@@ -101,7 +101,7 @@ export default function RegisterPage() {
               className={inputClass(Boolean(errors.email))}
             />
             {errors.email && (
-              <p id="register-email-error" className="mt-1 text-sm text-rose-300">
+              <p id="register-email-error" className="mt-1 text-sm text-danger-foreground">
                 {errors.email}
               </p>
             )}
@@ -110,7 +110,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="register-display-name"
-              className="mb-1.5 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-content-muted"
             >
               Display name
             </label>
@@ -126,7 +126,7 @@ export default function RegisterPage() {
               className={inputClass(Boolean(errors.display_name))}
             />
             {errors.display_name && (
-              <p id="register-display-name-error" className="mt-1 text-sm text-rose-300">
+              <p id="register-display-name-error" className="mt-1 text-sm text-danger-foreground">
                 {errors.display_name}
               </p>
             )}
@@ -135,7 +135,7 @@ export default function RegisterPage() {
           <div>
             <label
               htmlFor="register-password"
-              className="mb-1.5 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-content-muted"
             >
               Password
             </label>
@@ -156,18 +156,18 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword((current) => !current)}
-                className="absolute inset-y-0 right-0 flex w-14 items-center justify-center text-sm font-medium text-slate-400"
+                className="absolute inset-y-0 right-0 flex w-14 items-center justify-center text-sm font-medium text-content-muted"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
             {errors.password ? (
-              <p id="register-password-error" className="mt-1 text-sm text-rose-300">
+              <p id="register-password-error" className="mt-1 text-sm text-danger-foreground">
                 {errors.password}
               </p>
             ) : (
-              <p id="register-password-hint" className="mt-1 text-xs text-slate-500">
+              <p id="register-password-hint" className="mt-1 text-xs text-content-subtle">
                 At least 10 characters.
               </p>
             )}
@@ -176,7 +176,7 @@ export default function RegisterPage() {
           {formError && (
             <p
               role="alert"
-              className="rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200"
+              className="rounded-control border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-foreground"
             >
               {formError}
             </p>
@@ -185,13 +185,13 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={register.isPending}
-            className="min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 text-base font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-control bg-accent px-4 py-2.5 text-base font-semibold text-on-accent transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {register.isPending ? "Creating account…" : "Create account"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-400">
+        <p className="mt-6 text-center text-sm text-content-muted">
           Already have an account?{" "}
           <Link to="/login" className="font-semibold text-accent hover:text-accent-hover">
             Log in

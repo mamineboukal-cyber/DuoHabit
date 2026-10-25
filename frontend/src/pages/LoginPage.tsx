@@ -12,9 +12,9 @@ const LOGIN_MESSAGES: Record<string, string> = {
 
 function inputClass(hasError: boolean): string {
   return [
-    "min-h-11 w-full rounded-xl border bg-ink/60 px-3 py-2 text-base text-slate-100",
-    "placeholder:text-slate-500 focus:outline-none",
-    hasError ? "border-rose-400" : "border-white/10 focus:border-accent",
+    "min-h-11 w-full rounded-control border bg-canvas/60 px-3 py-2 text-base text-content",
+    "placeholder:text-content-subtle focus:outline-none",
+    hasError ? "border-danger" : "border-line focus:border-accent",
   ].join(" ");
 }
 
@@ -72,18 +72,18 @@ export default function LoginPage() {
         <header className="mb-8 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">DuoHabits</p>
           <h1 className="mt-2 text-3xl font-bold">Log in</h1>
-          <p className="mt-2 text-sm text-slate-400">Small habits, shared streak.</p>
+          <p className="mt-2 text-sm text-content-muted">Small habits, shared streak.</p>
         </header>
 
         <form
           noValidate
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-2xl border border-white/5 bg-surface p-5 shadow-xl"
+          className="space-y-4 rounded-card border border-line bg-surface p-5 shadow-xl"
         >
           <div>
             <label
               htmlFor="login-email"
-              className="mb-1.5 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-content-muted"
             >
               Email
             </label>
@@ -99,7 +99,7 @@ export default function LoginPage() {
               className={inputClass(Boolean(errors.email))}
             />
             {errors.email && (
-              <p id="login-email-error" className="mt-1 text-sm text-rose-300">
+              <p id="login-email-error" className="mt-1 text-sm text-danger-foreground">
                 {errors.email}
               </p>
             )}
@@ -108,7 +108,7 @@ export default function LoginPage() {
           <div>
             <label
               htmlFor="login-password"
-              className="mb-1.5 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-content-muted"
             >
               Password
             </label>
@@ -124,7 +124,7 @@ export default function LoginPage() {
               className={inputClass(Boolean(errors.password))}
             />
             {errors.password && (
-              <p id="login-password-error" className="mt-1 text-sm text-rose-300">
+              <p id="login-password-error" className="mt-1 text-sm text-danger-foreground">
                 {errors.password}
               </p>
             )}
@@ -133,7 +133,7 @@ export default function LoginPage() {
           {formError && (
             <p
               role="alert"
-              className="rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm text-rose-200"
+              className="rounded-control border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-foreground"
             >
               {formError}
             </p>
@@ -142,13 +142,13 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={login.isPending}
-            className="min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 text-base font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-control bg-accent px-4 py-2.5 text-base font-semibold text-on-accent transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {login.isPending ? "Logging in…" : "Log in"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-400">
+        <p className="mt-6 text-center text-sm text-content-muted">
           New here?{" "}
           <Link to="/register" className="font-semibold text-accent hover:text-accent-hover">
             Create an account

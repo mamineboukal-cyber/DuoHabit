@@ -1,16 +1,18 @@
 import type { ReactNode } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import { errorMessage } from "./api/client";
-import { useLogout, useMe } from "./api/hooks";
-import { useToast } from "./components/Toast";
+import { useMe } from "./api/hooks";
+import AppShell from "./components/AppShell";
+import ComingSoon from "./components/ComingSoon";
 import LoginPage from "./pages/LoginPage";
+import PairPage from "./pages/PairPage";
 import RegisterPage from "./pages/RegisterPage";
 
 function LoadingScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center px-5">
-      <p role="status" className="animate-pulse text-sm text-slate-400">
+      <p role="status" className="animate-pulse text-sm text-content-muted">
         Loading…
       </p>
     </main>
@@ -21,11 +23,11 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-5 text-center">
       <h1 className="text-xl font-semibold">Something went wrong</h1>
-      <p className="max-w-sm text-sm text-slate-400">{message}</p>
+      <p className="max-w-sm text-sm text-content-muted">{message}</p>
       <button
         type="button"
         onClick={onRetry}
-        className="min-h-11 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-hover"
+        className="min-h-11 rounded-control bg-accent px-5 py-2.5 text-sm font-semibold text-on-accent transition hover:bg-accent-hover"
       >
         Retry
       </button>
@@ -56,6 +58,17 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireCouple({ children }: { children: ReactNode }) {
+  const me = useMe();
+
+  // A solo couple has a `couple_id` and may use the whole app; only users with
+  // no couple are sent to /pair.
+  if (me.data?.couple_id == null) {
+    return <Navigate to="/pair" replace />;
+  }
+  return <>{children}</>;
+}
+
 function PublicOnly({ children }: { children: ReactNode }) {
   const me = useMe();
 
@@ -78,35 +91,20 @@ function PublicOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function HomePage() {
+function TodayPlaceholder() {
   const me = useMe();
-  const logout = useLogout();
-  const { showToast } = useToast();
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-sm flex-col items-center justify-center px-5 py-10 text-center">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">DuoHabits</p>
+    <section className="mx-auto max-w-xl">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Today</p>
       <h1 className="mt-3 text-2xl font-bold">
         You&apos;re signed in{me.data ? `, ${me.data.display_name}` : ""}.
       </h1>
-      <p className="mt-2 text-sm text-slate-400">
-        {me.data?.couple_id == null
-          ? "Pairing comes next; the Today screen arrives in Step 12."
-          : "Today arrives in Step 12."}
+      <p className="mt-2 text-sm text-content-muted">
+        The Today screen arrives in Step 12. Your habits, check-ins and partner progress will live
+        here.
       </p>
-      <button
-        type="button"
-        onClick={() =>
-          logout.mutate(undefined, {
-            onError: (error) => showToast(errorMessage(error)),
-          })
-        }
-        disabled={logout.isPending}
-        className="mt-8 min-h-11 rounded-xl border border-white/10 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {logout.isPending ? "Logging out…" : "Log out"}
-      </button>
-    </main>
+    </section>
   );
 }
 
@@ -130,13 +128,30 @@ export default function App() {
         }
       />
       <Route
-        path="/"
+        path="/pair"
         element={
           <RequireAuth>
-            <HomePage />
+            <PairPage />
           </RequireAuth>
         }
       />
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <RequireCouple>
+              <AppShell>
+                <Outlet />
+              </AppShell>
+            </RequireCouple>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<TodayPlaceholder />} />
+        <Route path="habits" element={<ComingSoon title="Habits" step={11} />} />
+        <Route path="duel" element={<ComingSoon title="Duel" step={13} />} />
+        <Route path="settings" element={<ComingSoon title="Settings" step={14} />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

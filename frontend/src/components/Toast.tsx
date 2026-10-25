@@ -66,8 +66,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role="status"
             className={
               toast.variant === "error"
-                ? "w-full max-w-sm rounded-xl border border-rose-400/40 bg-rose-950/90 px-4 py-3 text-sm text-rose-100 shadow-lg"
-                : "w-full max-w-sm rounded-xl border border-emerald-400/40 bg-emerald-950/90 px-4 py-3 text-sm text-emerald-100 shadow-lg"
+                ? "w-full max-w-sm rounded-control border border-danger/40 bg-danger-soft/90 px-4 py-3 text-sm text-danger-foreground shadow-lg"
+                : "w-full max-w-sm rounded-control border border-success/40 bg-success-soft/90 px-4 py-3 text-sm text-success-foreground shadow-lg"
             }
           >
             {toast.message}

@@ -30,6 +30,18 @@ export const loginPasswordSchema = z
   .min(1, "Password is required.")
   .max(128, "Password must be 128 characters or fewer.");
 
+/**
+ * Mirrors `backend/app/schemas/couple.py`: the code is stripped, uppercased and
+ * matched against the backend's 8-character alphabet (no I, O, 0 or 1).
+ */
+export const inviteCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/, "Enter a valid invite code.");
+
+export const joinCoupleSchema = z.object({ invite_code: inviteCodeSchema });
+
 export const loginSchema = z.object({
   email: emailSchema,
   password: loginPasswordSchema,
@@ -41,6 +53,7 @@ export const registerSchema = z.object({
   password: newPasswordSchema,
 });
 
+export type JoinCoupleValues = z.input<typeof joinCoupleSchema>;
 export type LoginValues = z.input<typeof loginSchema>;
 export type RegisterValues = z.input<typeof registerSchema>;
 

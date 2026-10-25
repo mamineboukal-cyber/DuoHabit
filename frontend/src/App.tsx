@@ -5,6 +5,8 @@ import { errorMessage } from "./api/client";
 import { useMe } from "./api/hooks";
 import AppShell from "./components/AppShell";
 import ComingSoon from "./components/ComingSoon";
+import HabitFormPage from "./pages/HabitFormPage";
+import HabitsPage from "./pages/HabitsPage";
 import LoginPage from "./pages/LoginPage";
 import PairPage from "./pages/PairPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -148,7 +150,9 @@ export default function App() {
         }
       >
         <Route index element={<TodayPlaceholder />} />
-        <Route path="habits" element={<ComingSoon title="Habits" step={11} />} />
+        <Route path="habits" element={<HabitsPage />} />
+        <Route path="habits/new" element={<HabitFormPage />} />
+        <Route path="habits/:id/edit" element={<HabitFormPage />} />
         <Route path="duel" element={<ComingSoon title="Duel" step={13} />} />
         <Route path="settings" element={<ComingSoon title="Settings" step={14} />} />
       </Route>

@@ -28,6 +28,37 @@ export interface CoupleResponse {
   couple: Couple;
 }
 
+export type HabitDifficulty = 1 | 2 | 3;
+export type HabitOwner = "me" | "partner";
+
+export interface Habit {
+  id: number;
+  owner_id: number;
+  name: string;
+  emoji: string | null;
+  difficulty: HabitDifficulty;
+  schedule_days: number[];
+  current_streak: number;
+  best_streak: number;
+  archived_at: string | null;
+  created_at: string;
+}
+
+export interface HabitsResponse {
+  habits: Habit[];
+}
+
+export interface HabitResponse {
+  habit: Habit;
+}
+
+export interface HabitPayload {
+  name: string;
+  emoji: string | null;
+  difficulty: HabitDifficulty;
+  schedule_days: number[];
+}
+
 export interface ApiErrorEnvelope {
   error: {
     code: string;

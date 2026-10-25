@@ -65,6 +65,12 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
     SECRET_KEY = os.environ.get("SECRET_KEY") or "testing-only-insecure-secret-key"
 
+    # Tests must not inherit the developer's local .env or shell values. Keep
+    # registration open by default and use one known origin; tests that need a
+    # non-empty allowlist set it explicitly on app.config.
+    ALLOWED_EMAILS = []
+    ALLOWED_ORIGINS = ["http://localhost:5173"]
+
 
 class ProductionConfig(Config):
     ENVIRONMENT = "production"

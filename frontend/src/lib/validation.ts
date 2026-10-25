@@ -42,6 +42,42 @@ export const inviteCodeSchema = z
 
 export const joinCoupleSchema = z.object({ invite_code: inviteCodeSchema });
 
+/**
+ * Mirrors `backend/app/schemas/habit.py`. Lengths are counted in Unicode code
+ * points so emoji behave exactly like Python/Pydantic `len`, not UTF-16 units.
+ */
+const characterCount = (value: string) => Array.from(value).length;
+
+export const habitNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Habit name is required.")
+  .refine((value) => characterCount(value) <= 60, "Habit name must be 60 characters or fewer.");
+
+export const habitEmojiSchema = z
+  .string()
+  .trim()
+  .refine((value) => characterCount(value) <= 8, "Emoji must be 8 characters or fewer.")
+  .transform((value) => (value === "" ? null : value));
+
+export const habitDifficultySchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+
+export const habitScheduleDaysSchema = z
+  .array(z.number().int().min(0).max(6))
+  .min(1, "Pick at least one day.")
+  .refine((days) => new Set(days).size === days.length, "Days must not repeat.")
+  .transform((days) => [...days].sort((left, right) => left - right));
+
+export const habitFormSchema = z.object({
+  name: habitNameSchema,
+  emoji: habitEmojiSchema,
+  difficulty: habitDifficultySchema,
+  schedule_days: habitScheduleDaysSchema,
+});
+
+export type HabitFormValues = z.input<typeof habitFormSchema>;
+export type HabitFormData = z.output<typeof habitFormSchema>;
+
 export const loginSchema = z.object({
   email: emailSchema,
   password: loginPasswordSchema,

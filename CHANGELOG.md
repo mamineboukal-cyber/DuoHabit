@@ -855,5 +855,147 @@ Modified: `frontend/tailwind.config.js`, `frontend/src/{App.tsx,styles.css}`,
   files to LF during `npm run format`; that produced no content changes outside the files
   listed above.
 
+## Step 11 — Habits UI (F3 UI) — 2026-10-25
+
+### Added
+
+- `src/pages/HabitsPage.tsx`:
+  - Mine / Partner's segmented control (`aria-pressed`); the partner list is read-only.
+  - Cards show the emoji (or the first code point of the name), name, difficulty plus base
+    points, weekday schedule ("Every day" when all seven), current streak and best streak.
+  - Loading skeleton, error with Retry, and separate mine/partner empty states. The partner
+    empty state is generic ("When your partner adds habits, they'll appear here.") and has
+    no create link.
+  - Mine cards have Edit and Archive; Archive opens the shared confirmation dialog. A
+    floating "+" link to `/habits/new` is shown only on Mine.
+  - A read-only banner appears on the Partner's view.
+- `src/pages/HabitFormPage.tsx`:
+  - Create and edit modes (`/habits/new`, `/habits/:id/edit`); edit hydrates from
+    `GET /api/habits?owner=me` and shows "Habit not found" for ids that are not in the
+    active list.
+  - Name (60), optional emoji (8), difficulty (Easy/Medium/Hard, 10/20/30 base points), and
+    weekday chips defaulting to all seven in create mode.
+  - Client zod validation with code-point lengths; field-level server errors (including
+    `habit_name_taken`); an archive section with the shared confirmation dialog; success
+    toasts "Habit created.", "Habit saved." and "Habit archived.".
+- `src/components/ConfirmDialog.tsx`: shared accessible modal (`role="dialog"`,
+  `aria-modal`, labelled/described, Escape/backdrop cancel, Cancel focused on open, focus
+  restored on close, pending/error states, 44 px targets).
+- `src/api/types.ts`: `Habit`, `HabitsResponse`, `HabitResponse`, `HabitPayload`,
+  `HabitDifficulty`, `HabitOwner`.
+- `src/api/hooks.ts`: `habitsQueryRoot`, `habitsQueryKey`, `useHabits(owner, { enabled })`,
+  `useCreateHabit`, `useUpdateHabit`, `useArchiveHabit`. All three mutations invalidate the
+  whole `["habits"]` root; logout and any non-`/me` 401 remove cached habits.
+- `src/lib/validation.ts`: `habitNameSchema`, `habitEmojiSchema`, `habitDifficultySchema`,
+  `habitScheduleDaysSchema`, `habitFormSchema`. Lengths are counted in Unicode code points
+  via `Array.from`; the schedule requires at least one unique day and is sorted.
+- Routing: `/habits`, `/habits/new` and `/habits/:id/edit` now render the real pages;
+  `/duel` and `/settings` remain `ComingSoon` (Steps 13/14).
+- `src/tests/server.ts`: `myHabit`/`partnerHabit` fixtures and a default empty
+  `GET */api/habits` handler so shell navigation keeps working under MSW's
+  `onUnhandledRequest: "error"`.
+
+### Files touched
+
+Created: `frontend/src/components/ConfirmDialog.tsx`,
+`frontend/src/pages/{HabitsPage,HabitFormPage}.tsx`,
+`frontend/src/tests/{habits,validation}.test.tsx`.
+
+Modified: `frontend/src/App.tsx`, `frontend/src/api/{hooks,types}.ts`,
+`frontend/src/lib/validation.ts`, `frontend/src/tests/server.ts`,
+`backend/app/config.py`, `CHANGELOG.md`. No dependency, migration or CI changes.
+
+### Tests added
+
+- 19 frontend tests in 2 new files (48 total; backend test count unchanged at 185):
+  - Habits page (6): list rendering (schedule, difficulty/points, streak, edit/archive/FAB);
+    partner list read-only with no Edit/Archive/New habit controls at all; mine/partner
+    empty states; FAB navigates to the form; archive confirm Cancel then confirm, toast and
+    refreshed empty list; list error with Retry.
+  - Habit form (7): required name and at least one weekday, with the 8-character hint; name
+    61 vs 60 and emoji 9 vs 8 code points; create sends the selected difficulty/weekdays
+    and shows the toast plus the refreshed list; edit prefill and PATCH plus toast and list;
+    archive from edit after confirmation; field-level server errors (409
+    `habit_name_taken` and 422 details); not-found for an unknown edit id.
+  - Validation unit tests (6): code-point name/emoji limits, trimming/blank handling,
+    unique/sorted weekdays, normalized payload, and issue-to-field mapping.
+- `appShell.test.tsx` still passes with the real `/habits` route because of the default
+  habits handler.
+
+### Approved deviations / decisions
+
+1. **Edit data comes from `GET /api/habits?owner=me`** (approved): there is no
+   `GET /api/habits/{id}`. The edit route finds the id in the active list and shows "Habit
+   not found" if it is absent (archived or foreign). `useHabits("me", { enabled: isEdit })`
+   avoids a list request on the create route.
+2. **Code-point lengths, no `maxLength`** (approved): `Array.from(value).length` matches
+   Python/Pydantic `len`; HTML `maxLength` counts UTF-16 units and would reject 60 astral
+   characters at 30. Helper text is "Up to 60 characters." / "Optional, up to 8
+   characters."
+3. **No optimistic habit mutations** (approved): create/update/archive wait for the API and
+   invalidate `["habits"]`, so both Mine and Partner's lists refetch. This deliberately
+   differs from Step 12's optimistic check-in toggle.
+4. **Habit cache clearing** (approved addition): logout and any non-`/me` 401 now remove
+   `["habits"]`, mirroring the Step 10 couple-cache handling, so one account's habits cannot
+   leak into the next session.
+5. **Unicode-safe fallback glyph** (approved fix): `HabitCard` uses
+   `Array.from(habit.name.trim())[0]` rather than `charAt(0)`, which would split an
+   emoji-first name into half a surrogate pair.
+6. **FAB placement** (owner addition): the "+" uses
+   `bottom-[calc(6rem_+_env(safe-area-inset-bottom))]` below 768 px and `md:bottom-8` above
+   it, so it clears the fixed bottom tab bar. This is the one arbitrary spacing expression;
+   it is a layout offset, not a colour/radius/font token, and Tailwind emitted it into the
+   built CSS. The FAB uses the `rounded-pill` token, not `rounded-full`, per the owner's
+   note.
+7. **Weekday chips** (owner addition): `flex flex-wrap` plus `min-h-tap min-w-11` gives
+   44 px tap targets and wraps on narrow screens. Difficulty cards also use `min-h-tap`.
+8. **Partner read-only test** (owner addition): asserts the partner view has no `Edit …`,
+   `Archive …` or `New habit` controls at all, in addition to the visible read-only banner.
+9. **`ComingSoon` kept for `/duel` and `/settings`** (approved): only the `/habits`
+   placeholder was replaced; Steps 13/14 still own those screens.
+10. **No "show archived" UI** (approved): the list requests active habits only; archived
+    habits are reachable only through the API, and the edit form reports "Habit not found".
+11. **Test fixtures** (approved): `tests/server.ts` gained `myHabit`, `partnerHabit` and a
+    default empty `GET */api/habits`. Without the handler, MSW's
+    `onUnhandledRequest: "error"` would fail `appShell.test.tsx` now that `/habits` is real.
+12. **Token-only styling** (owner constraint): all new colours, font families and radii use
+    `tailwind.config.js` tokens. Arbitrary values are limited to the FAB's safe-area offset
+    (recorded above) and the existing `tracking-[0.2em]` heading pattern from Steps 9-10.
+    The audit found no hex/arbitrary colours, default-palette utilities, non-token radii
+    (including `rounded-full`), or `font-serif`/`font-mono` under `frontend/src`.
+    `index.html`'s `<meta name="theme-color">` remains the only literal colour (unchanged
+    from Step 10).
+13. **`aria-describedby` fixes** (polish): the difficulty and weekday fieldsets now point at
+    their error or hint ids, and the weekday hint has an id. The weekday hint and error are
+    mutually exclusive, so the same sentence is not shown twice.
+
+### Implementation notes
+
+- `HabitFormPage` uses `noValidate` and zod; client errors clear per field as the user
+  edits. `habit_name_taken` is mapped to the name field; other 422 `details` are filtered
+  to the four known fields; network errors (status 0) show a toast, and all other errors
+  use the form-level alert.
+- The archive dialog is rendered on both the list and edit pages; it blocks Cancel, Escape
+  and backdrop dismissal while pending and shows the mutation error inside the dialog. The
+  list keeps the dialog open on error; the edit page navigates to `/habits` on success.
+- The list uses TanStack Query `isPending`/`isError`; Retry calls `refetch()`. The edit page
+  distinguishes loading, load error (Retry), not found, and the form.
+- Success toasts are exactly "Habit created.", "Habit saved." and "Habit archived."; list
+  refresh is driven by invalidation, not by manual cache writes.
+- Verification: `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`
+  (48/48) and `npm run build` pass; build emits 306.29 kB JS / 89.22 kB gzip and 17.07 kB
+  CSS / 4.09 kB gzip. Backend `ruff check` and `ruff format --check` pass; `pytest` is
+  185/185.
+- Test isolation: `TestingConfig` now forces `ALLOWED_EMAILS = []` and
+  `ALLOWED_ORIGINS = ["http://localhost:5173"]`, so a local `.env` or shell environment
+  cannot close registration or change origin checks during tests. Tests that need a
+  non-empty allowlist or a different origin list set `app.config` explicitly. The suite
+  was verified with the real `.env` (which contains both values) present; Docker
+  Desktop/PostgreSQL 16 had to be started for the test database.
+- Token audit: no matches for raw hex/`[#…]`, default-palette utilities,
+  `rounded-{sm,md,lg,xl,2xl,3xl,full,none}`, bare `rounded`, arbitrary colour utilities,
+  inline `style={...}`, or `font-serif`/`font-mono` under `frontend/src`. The FAB offset is
+  present in the built CSS and `rounded-pill` emits `border-radius: 9999px`.
+
 
 

@@ -1,10 +1,21 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiRequest, isApiError } from "./client";
-import type { AuthResponse, Couple, CoupleResponse, User } from "./types";
+import type {
+  AuthResponse,
+  Couple,
+  CoupleResponse,
+  HabitOwner,
+  HabitPayload,
+  HabitResponse,
+  HabitsResponse,
+  User,
+} from "./types";
 
 export const meQueryKey = ["me"] as const;
 export const coupleQueryKey = ["couple"] as const;
+export const habitsQueryRoot = ["habits"] as const;
+export const habitsQueryKey = (owner: HabitOwner) => ["habits", owner] as const;
 
 /** Couple polling interval while waiting for the partner (PLAN section 8). */
 export const COUPLE_POLL_INTERVAL_MS = 5_000;
@@ -53,6 +64,7 @@ export function createQueryClient(): QueryClient {
     if (isApiError(error) && error.status === 401) {
       queryClient.setQueryData(meQueryKey, null);
       queryClient.removeQueries({ queryKey: coupleQueryKey });
+      queryClient.removeQueries({ queryKey: habitsQueryRoot });
     }
   };
   queryClient.getQueryCache().config.onError = handleAuthError;
@@ -128,6 +140,50 @@ export function useJoinCouple() {
   });
 }
 
+/** Active habits for the caller or their partner. */
+export function useHabits(owner: HabitOwner, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: habitsQueryKey(owner),
+    queryFn: () => apiRequest<HabitsResponse>(`/api/habits?owner=${owner}`),
+    enabled: options.enabled ?? true,
+  });
+}
+
+export function useCreateHabit() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: HabitPayload) =>
+      apiRequest<HabitResponse>("/api/habits", { method: "POST", body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: habitsQueryRoot });
+    },
+  });
+}
+
+export function useUpdateHabit() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: HabitPayload }) =>
+      apiRequest<HabitResponse>(`/api/habits/${id}`, { method: "PATCH", body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: habitsQueryRoot });
+    },
+  });
+}
+
+export function useArchiveHabit() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => apiRequest<void>(`/api/habits/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: habitsQueryRoot });
+    },
+  });
+}
+
 export function useLogin() {
   const queryClient = useQueryClient();
 
@@ -160,6 +216,7 @@ export function useLogout() {
     onSettled: () => {
       queryClient.setQueryData(meQueryKey, null);
       queryClient.removeQueries({ queryKey: coupleQueryKey });
+      queryClient.removeQueries({ queryKey: habitsQueryRoot });
     },
   });
 }

@@ -298,6 +298,107 @@ def test_other_couple_habits_and_points_are_not_visible(
     assert body["partner"] is None
 
 
+def test_today_date_query_keeps_the_no_parameter_response_identical(
+    client: FlaskClient,
+) -> None:
+    """The date parameter only adds the streak preview; the normal payload is unchanged."""
+    _register(client, "solo@example.com", "Solo")
+    _create_couple(client)
+    _create_habit(client, name="Walk")
+
+    no_parameter = client.get("/api/today")
+    explicit_today = client.get(f"/api/today?date={_today().isoformat()}")
+
+    assert explicit_today.status_code == 200
+    plain_body = no_parameter.get_json()
+    dated_body = explicit_today.get_json()
+    assert "streak_if_done" not in plain_body["me"]["habits"][0]
+    assert "streak_if_done" in dated_body["me"]["habits"][0]
+
+    dated_without_preview = {
+        **dated_body,
+        "me": {
+            **dated_body["me"],
+            "habits": [
+                {key: value for key, value in row.items() if key != "streak_if_done"}
+                for row in dated_body["me"]["habits"]
+            ],
+        },
+    }
+    assert dated_without_preview == plain_body
+
+
+def test_yesterday_query_returns_yesterday_habits_and_checkins(client: FlaskClient) -> None:
+    _register(client, "solo@example.com", "Solo")
+    _create_couple(client)
+    habit_id = _create_habit(client, name="Walk")
+    yesterday = _today() - timedelta(days=1)
+    assert _checkin(client, habit_id, yesterday).status_code == 201
+
+    body = client.get(f"/api/today?date={yesterday.isoformat()}").get_json()
+
+    assert body["date"] == yesterday.isoformat()
+    me = body["me"]
+    assert me["today_points"] == 10
+    assert me["total_xp"] == 10
+    row = me["habits"][0]
+    assert row["habit"]["id"] == habit_id
+    assert row["done"] is True
+    assert row["checkin_points"] == 10
+    assert row["points_if_done"] == 10
+    assert row["streak_if_done"] == 1
+
+
+def test_yesterday_points_if_done_matches_a_real_yesterday_checkin(
+    client: FlaskClient,
+) -> None:
+    """The yesterday preview must equal the points and streak the API awards."""
+    _register(client, "solo@example.com", "Solo")
+    _create_couple(client)
+    habit_id = _create_habit(client, name="Walk")
+    yesterday = _today() - timedelta(days=1)
+
+    preview = client.get(f"/api/today?date={yesterday.isoformat()}").get_json()["me"]["habits"][0]
+    assert preview["done"] is False
+    assert preview["checkin_points"] is None
+
+    created = _checkin(client, habit_id, yesterday)
+
+    assert created.status_code == 201
+    checkin = created.get_json()["checkin"]
+    assert checkin["points"] == preview["points_if_done"]
+    assert checkin["streak_at_checkin"] == preview["streak_if_done"]
+
+    after = client.get(f"/api/today?date={yesterday.isoformat()}").get_json()["me"]["habits"][0]
+    assert after["done"] is True
+    assert after["checkin_points"] == preview["points_if_done"]
+
+
+@pytest.mark.parametrize("value", ["not-a-date", "2026-13-01", "2026-02-30"])
+def test_today_query_rejects_malformed_dates(client: FlaskClient, value: str) -> None:
+    _register(client, "solo@example.com", "Solo")
+    _create_couple(client)
+
+    response = client.get(f"/api/today?date={value}")
+
+    assert response.status_code == 422
+    error = response.get_json()["error"]
+    assert error["code"] == "validation_error"
+    assert "date" in error["details"]
+
+
+@pytest.mark.parametrize("days", [-2, 1])
+def test_today_query_rejects_dates_outside_the_window(client: FlaskClient, days: int) -> None:
+    _register(client, "solo@example.com", "Solo")
+    _create_couple(client)
+    value = (_today() + timedelta(days=days)).isoformat()
+
+    response = client.get(f"/api/today?date={value}")
+
+    assert response.status_code == 422
+    assert response.get_json()["error"]["code"] == "date_out_of_range"
+
+
 @freeze_time("2026-10-25 23:30:00")
 def test_date_and_schedule_follow_the_couple_timezone(client: FlaskClient) -> None:
     """At 23:30 UTC it is already Monday in Tokyo, so Monday's habits show."""

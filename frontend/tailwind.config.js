@@ -58,6 +58,22 @@ export default {
       maxWidth: {
         content: "1100px",
       },
+      keyframes: {
+        confetti: {
+          "0%": { opacity: "0", transform: "translateY(-10vh) rotate(0deg)" },
+          "10%": { opacity: "1" },
+          "100%": { opacity: "0", transform: "translateY(110vh) rotate(720deg)" },
+        },
+        "xp-float": {
+          "0%": { opacity: "0", transform: "translateY(0.25rem)" },
+          "20%": { opacity: "1" },
+          "100%": { opacity: "0", transform: "translateY(-1.5rem)" },
+        },
+      },
+      animation: {
+        confetti: "confetti 1.8s ease-in forwards",
+        "xp-float": "xp-float 1.2s ease-out forwards",
+      },
     },
   },
   plugins: [],

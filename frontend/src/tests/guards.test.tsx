@@ -46,7 +46,7 @@ describe("route guards", () => {
 
     renderApp("/");
 
-    expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Today" }).length).toBeGreaterThan(0);
   });
 
@@ -73,6 +73,6 @@ describe("route guards", () => {
 
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 });

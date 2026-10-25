@@ -10,6 +10,7 @@ import HabitsPage from "./pages/HabitsPage";
 import LoginPage from "./pages/LoginPage";
 import PairPage from "./pages/PairPage";
 import RegisterPage from "./pages/RegisterPage";
+import TodayPage from "./pages/TodayPage";
 
 function LoadingScreen() {
   return (
@@ -93,23 +94,6 @@ function PublicOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function TodayPlaceholder() {
-  const me = useMe();
-
-  return (
-    <section className="mx-auto max-w-xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Today</p>
-      <h1 className="mt-3 text-2xl font-bold">
-        You&apos;re signed in{me.data ? `, ${me.data.display_name}` : ""}.
-      </h1>
-      <p className="mt-2 text-sm text-content-muted">
-        The Today screen arrives in Step 12. Your habits, check-ins and partner progress will live
-        here.
-      </p>
-    </section>
-  );
-}
-
 export default function App() {
   return (
     <Routes>
@@ -149,7 +133,7 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<TodayPlaceholder />} />
+        <Route index element={<TodayPage />} />
         <Route path="habits" element={<HabitsPage />} />
         <Route path="habits/new" element={<HabitFormPage />} />
         <Route path="habits/:id/edit" element={<HabitFormPage />} />

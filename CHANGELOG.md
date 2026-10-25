@@ -997,5 +997,131 @@ Modified: `frontend/src/App.tsx`, `frontend/src/api/{hooks,types}.ts`,
   inline `style={...}`, or `font-serif`/`font-mono` under `frontend/src`. The FAB offset is
   present in the built CSS and `rounded-pill` emits `border-radius: 9999px`.
 
+## Step 12 — Today UI (F4, F5, F6, F8) — 2026-10-25
 
+### Added
+
+- `src/pages/TodayPage.tsx`: the Today dashboard with a Today/Yesterday segmented control,
+  the selected date, a personal points/XP summary, and side-by-side Me/Partner sections.
+  It renders loading, empty, full error-with-Retry, and stale-data refresh-error states.
+- `src/components/HabitRow.tsx`: a whole-row check-in target with a visible done indicator,
+  emoji/name, streak flame, point preview, read-only partner status, and an accessible
+  `aria-pressed`/`aria-busy` toggle. The optimistic `+N XP` floats above the row.
+- `src/components/XpBar.tsx`: level badge plus an accessible `role="progressbar"` bar showing
+  XP into the current level.
+- `src/components/Confetti.tsx`: a 24-piece level-up celebration, `aria-hidden`, with
+  reduced-motion suppression.
+- `src/lib/dates.ts`: UTC-noon ISO date arithmetic and locale date formatting.
+- `src/lib/xp.ts`: a frontend mirror of the backend `scoring.xp_progress` formula.
+- `src/api/hooks.ts`: `todayQueryRoot`/`todayQueryKey`, `TODAY_POLL_INTERVAL_MS` (15 s),
+  `useToday`, `useCreateCheckin` and `useUndoCheckin`. The check-in/undo mutations snapshot
+  the active Today cache, update it optimistically, restore the snapshot on error, apply the
+  server response on success, and invalidate `["today"]` plus `["habits"]` on settle.
+- `src/api/types.ts`: `TodayHabitRow`, `TodayMember`, `TodayResponse`, `Checkin`,
+  `CheckinResponse`, `UndoCheckinResponse`; `streak_if_done` is optional because only dated
+  responses include it.
+- `src/tests/server.ts`: Today fixtures, including checked-in Today, partner, empty and
+  Yesterday payloads, plus a default `GET */api/today` handler.
+- `frontend/tailwind.config.js`: `confetti` and `xp-float` keyframes/animations.
+- Backend `TodayQuery` (optional ISO `date`, `extra="forbid"`), date-aware
+  `GET /api/today`, and the selected-day service path. Dated responses add
+  `streak_if_done`; the no-parameter response keeps its original shape.
+
+### Files touched
+
+Created: `backend/app/schemas/dashboard.py`,
+`frontend/src/components/{Confetti,HabitRow,XpBar}.tsx`,
+`frontend/src/lib/{dates,xp}.ts`, `frontend/src/pages/TodayPage.tsx`,
+`frontend/src/tests/{today,xp}.test.tsx`.
+
+Modified: `backend/app/routes/dashboard.py`,
+`backend/app/services/dashboard_service.py`,
+`backend/tests/integration/test_today.py`, `frontend/src/App.tsx`,
+`frontend/src/api/{hooks,types}.ts`, `frontend/src/tests/{appShell,guards,pair}.test.tsx`,
+`frontend/src/tests/server.ts`, `frontend/tailwind.config.js`, `CHANGELOG.md`.
+No dependency, migration, CI, `.env`, or `TestingConfig` changes.
+
+### Tests added
+
+- 14 frontend tests in 2 new files (62 total; backend 193, 8 new cases):
+  - Today (12): loading; empty with create link; full error with Retry; optimistic check-in
+    with `+11 XP`, level-up confetti and the reduced-motion classes; 500 rollback plus toast;
+    409 rollback plus toast; optimistic undo; partner section read-only with no buttons;
+    no-partner invitation; Yesterday date/body and dated check-in; 15 s polling; and an
+    in-flight poll that arrives during a check-in and must not overwrite optimistic state.
+  - XP unit (2): the 0/99/100/399/400 level boundaries and negative-total clamping.
+- Backend 8 new cases in `test_today.py`: the dated response minus `streak_if_done` is
+  identical to the no-parameter response; yesterday rows/check-ins; yesterday
+  `points_if_done` and `streak_if_done` equal what a real yesterday check-in awards;
+  three malformed-date 422 `validation_error` cases with `details.date`; and two
+  out-of-range 422 `date_out_of_range` cases. The Step 7 tests pass unchanged.
+
+### Approved deviations / decisions
+
+1. **Optional `GET /api/today?date=YYYY-MM-DD`** (approved deviation 1): only the couple-TZ
+   today and yesterday are accepted. A malformed date is 422 `validation_error` with
+   `details.date`; a well-formed date outside the window is 422 `date_out_of_range`, matching
+   the check-in endpoint. The no-parameter response is byte-for-byte unchanged, and the
+   existing Step 7 tests still pass.
+2. **`streak_if_done`** (approved deviation 2): dated responses include the exact streak a
+   check-in would produce, including for Yesterday. The no-parameter response omits the
+   field; Today uses `current_streak + 1` for its optimistic preview. A backend test proves
+   the Yesterday preview matches a real check-in's points and streak.
+3. **One active Today/Yesterday query** (approved): the page uses one `useToday` query keyed
+   by the selected date; Yesterday is derived from the server's Today date minus one day.
+   Polling is 15 s while the tab is visible, paused while a mutation is pending, and the
+   in-flight query is cancelled when a check-in/undo starts. A successful mutation applies
+   the server response; an error restores the snapshot; settle invalidates `["today"]` and
+   `["habits"]`.
+4. **Optimistic check-in/undo only** (approved): habit create/update/archive remain
+   non-optimistic and still invalidate the whole `["habits"]` root. Check-in/undo also
+   invalidate `["today"]`, so the partner and totals refetch.
+5. **Local loading/error blocks** (approved): Today uses its own loading skeleton and
+   error-with-Retry card instead of introducing Step 14's shared `Skeleton`/`ErrorState`
+   early.
+6. **Yesterday labels** (approved): the header, date and points use “yesterday”; level and
+   XP remain the current values, matching the API payload.
+7. **Reduced motion** (owner constraint): the confetti overlay is
+   `motion-reduce:hidden`; its pieces and the floating `+N XP` use
+   `motion-reduce:animate-none`.
+8. **Token-only styling** (owner constraint): new colours and radii use
+   `tailwind.config.js` tokens (`rounded-pill` rather than `rounded-full`). The audit found
+   no hex/arbitrary colours, default-palette utilities, or non-token radii. The only inline
+   styles are the dynamic XP bar width and confetti position/delay/duration; neither is a
+   colour or radius.
+9. **Test fixtures and route updates** (approved): the default MSW Today handler keeps
+   shell navigation working, and the app-shell, guards and pair tests now assert the real
+   Today heading instead of the removed placeholder.
+10. **Scope** (approved): this step stops before Step 13; `/duel` and `/settings` remain
+    `ComingSoon`.
+
+### Implementation notes
+
+- Query keys are `["today", "today"]` for the no-parameter request and
+  `["today", "YYYY-MM-DD"]` for a dated request. The Today tab does not send a date, so the
+  server's date remains authoritative. Switching to Yesterday reads the loaded Today date
+  and requests the previous day.
+- `onMutate` cancels the active Today query, snapshots its data, and writes the optimistic
+  check-in/undo. `onError` restores the snapshot and the page shows a toast; `onSuccess`
+  applies the check-in/undo response; `onSettled` invalidates the Today and habit roots.
+  The 15 s poll is disabled while the mutation is pending. The poll-race test starts a
+  delayed poll, begins a check-in, releases the stale poll, and asserts the row stays done.
+- The XP mirror is `level = floor(sqrt(total_xp // 100)) + 1`, with
+  `xp_into_level = total_xp - 100 * (level - 1) ** 2` and
+  `xp_for_next_level = 100 * level ** 2 - 100 * (level - 1) ** 2`. The level effect fires
+  only when the level increases; the confetti clears after 2.2 s and the `+N XP` feedback
+  after 1.2 s. A failed check-in clears the floating feedback before showing the toast.
+- The partner section is rendered with `readOnly`; it shows the partner's level, selected-day
+  points and a Read-only badge, and contains no buttons. The own section disables all rows
+  while a mutation is pending.
+- Verification: `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`
+  (62/62) and `npm run build` pass; build emits 321.32 kB JS / 92.55 kB gzip and 19.04 kB
+  CSS / 4.48 kB gzip. Backend `ruff check` and `ruff format --check` pass; `pytest` is
+  193/193 with the real `.env` present and the PostgreSQL 16 container running.
+- Token audit: no raw hex, arbitrary colour, default-palette utility,
+  `rounded-{sm,md,lg,xl,2xl,3xl,full,none}`, bare `rounded`, or `font-serif`/`font-mono`
+  matches under `frontend/src`. `rounded-pill` is used for pills and the progress bar.
+  Inline styles are limited to the dynamic XP width and confetti position/animation values.
+- `.env` and `TestingConfig` were not modified. The test suite still uses the isolated
+  `ALLOWED_EMAILS`/`ALLOWED_ORIGINS` values from Step 11.
 

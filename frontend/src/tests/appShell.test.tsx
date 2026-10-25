@@ -20,7 +20,7 @@ describe("AppShell", () => {
 
     renderApp("/");
 
-    expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
     const nav = await mobileNav();
     expect(within(nav).getByRole("link", { name: "Today" })).toHaveAttribute(
       "aria-current",
@@ -52,7 +52,7 @@ describe("AppShell", () => {
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
 
     await user.click(within(nav).getByRole("link", { name: "Today" }));
-    expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 
   it("redirects a full couple from /pair to /", async () => {
@@ -61,6 +61,6 @@ describe("AppShell", () => {
 
     renderApp("/pair");
 
-    expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 });

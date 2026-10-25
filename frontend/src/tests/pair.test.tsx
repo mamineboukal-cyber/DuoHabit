@@ -75,7 +75,7 @@ describe("PairPage", () => {
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("link", { name: "Continue to the app" }));
-    expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 
   it("polls while solo and moves to / when the partner joins", async () => {
@@ -97,7 +97,7 @@ describe("PairPage", () => {
         await vi.advanceTimersByTimeAsync(5_000);
       });
 
-      expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
       expect(calls).toBeGreaterThanOrEqual(2);
     } finally {
       vi.useRealTimers();
@@ -121,7 +121,7 @@ describe("PairPage", () => {
     expect(input).toHaveValue("ABCD2345");
     await user.click(screen.getByRole("button", { name: "Join" }));
 
-    expect(await screen.findByText(/You're signed in, Owner/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
     expect(body).toEqual({ invite_code: "ABCD2345" });
   });
 

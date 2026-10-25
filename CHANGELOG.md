@@ -151,4 +151,72 @@ Newest entries are appended at the bottom.
 - Configure `werkzeug.middleware.proxy_fix.ProxyFix` so rate limiting sees the real client
   IP behind the Render proxy.
 
+## Step 4 — Couple pairing (F2) — 2026-10-25
+
+### Added
+
+- `POST /api/couple` (201), `POST /api/couple/join` (200), `GET /api/couple` (200) and
+  `PATCH /api/couple` (200), returning the section-7 `couple` object.
+- 8-character invite codes from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` via `secrets.choice`;
+  the code is returned only while the couple has one member and becomes `null` at two.
+- Join flow: `409 already_in_couple` first, then `SELECT ... FOR UPDATE` on the couple
+  row, a fresh member count, `404 invalid_code` for unknown codes and `409 couple_full`
+  at two members. The row lock makes the two-seat rule safe under concurrent joins.
+- Timezone support: `services/timeutil.py` validates IANA names with stdlib
+  `zoneinfo`; create defaults to `DEFAULT_TIMEZONE`, either member can PATCH, and invalid
+  names return `422 validation_error` with `details.timezone`.
+- `409 no_couple` for `GET`/`PATCH` when the caller has no couple; every read derives the
+  couple from `current_user.couple_id`, so there is no cross-couple lookup path.
+- `POST /api/couple/join` has its own 10/min per-IP bucket (section 9), applied above
+  `@login_required` so unauthenticated guessing is counted too.
+
+### Files touched
+
+`backend/app/services/{timeutil,couple_service}.py`,
+`backend/app/schemas/{__init__,couple}.py`, `backend/app/routes/couple.py`,
+`backend/app/__init__.py`, `backend/tests/conftest.py`,
+`backend/tests/integration/test_couple.py`, `backend/tests/unit/{__init__,test_timeutil}.py`,
+`CHANGELOG.md`.
+
+### Tests added
+
+- `test_couple.py`: create 201 (code shape/alphabet, default and explicit timezone,
+  absent body), duplicate create 409, invalid timezone 422, malformed JSON 400, join 200
+  with lowercase/whitespace code, hidden code at two members, unknown code 404, malformed
+  code 422, full couple 409, already-paired precedence 409, `no_couple` 409 on
+  GET/PATCH, timezone change by either member, extra-field rejection, two-couple
+  isolation, 11th join in a minute 429, and the two-thread concurrent join with exactly
+  one success and two final members.
+- `test_timeutil.py`: valid IANA names accepted; empty, unknown, traversal-style and
+  over-64-character names rejected.
+
+### Approved deviations / decisions
+
+- **`tests/unit/test_timeutil.py` (+ `tests/unit/__init__.py`) added** (owner-approved);
+  Step 4's list omitted test files.
+- **The concurrency test commits real rows** (owner-approved): it skips the rollback
+  fixture, seeds users with unique emails, uses two app contexts/connections and a
+  barrier, and removes its users and couple in `finally` so a failure cannot leave rows
+  behind.
+- **Join is rate limited to 10/min per IP** and tested (owner-approved; section 9
+  requires it even though Step 4's bullet did not repeat it).
+- **Invite codes are stripped and uppercased before validation** (owner-approved);
+  malformed shapes return 422, well-formed unknown codes 404 `invalid_code`.
+- **Invite-code collisions are retried** up to 5 generations on the unique constraint
+  (owner-approved) instead of surfacing a 500.
+- **An absent body on `POST /api/couple` is treated as `{}`** (owner's change); malformed
+  JSON still returns 400 `bad_json` and a non-JSON body 415.
+- **`already_in_couple` is checked before the invite code** (owner-approved), so a paired
+  user never learns whether a code exists.
+
+### Implementation notes
+
+- **Test harness:** multiple test clients in one test share the per-test app context, so
+  Flask-Login's `g._login_user` cache leaked the previous client's user. The test client
+  now clears that cache before each request; production already gets a fresh app context
+  per request.
+- No model or migration changes (`flask db check` reports no drift); no new dependencies.
+- `created_at` is serialized as ISO 8601 UTC; members are ordered by id.
+
+
 

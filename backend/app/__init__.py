@@ -12,6 +12,7 @@ from .errors import ApiError, register_error_handlers
 from .extensions import db, limiter, login_manager, migrate
 from .models import User
 from .routes.auth import bp as auth_bp
+from .routes.couple import bp as couple_bp
 from .routes.health import bp as health_bp
 from .security import register_security
 
@@ -49,6 +50,7 @@ def create_app(config_name: str | None = None) -> Flask:
 
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(couple_bp, url_prefix="/api")
 
     register_security(app)
     register_error_handlers(app)

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
-from flask import Flask
+from flask import Flask, g
 from flask.testing import FlaskClient
 from sqlalchemy.orm import Session
 
@@ -13,10 +14,24 @@ from app import create_app
 from app.extensions import db, limiter
 
 
+class _FreshLoginClient(FlaskClient):
+    """Drop Flask-Login's app-context user cache before every request.
+
+    Tests keep one app context alive for the whole test (needed by the
+    rollback fixture), whereas production pushes a fresh one per request. The
+    cache would otherwise leak the previously loaded user between clients.
+    """
+
+    def open(self, *args: Any, **kwargs: Any) -> Any:
+        g.pop("_login_user", None)
+        return super().open(*args, **kwargs)
+
+
 @pytest.fixture(scope="session")
 def app() -> Iterator[Flask]:
     """Session-wide app with the schema created from model metadata."""
     application = create_app("testing")
+    application.test_client_class = _FreshLoginClient
 
     with application.app_context():
         db.create_all()
